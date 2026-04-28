@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --surface: #f8fafc;
+  --surface-strong: #ffffff;
+  --surface-muted: #e2e8f0;
+  --text-muted: #4b5563;
+  --border: rgba(15, 23, 42, 0.08);
+  --btn-primary: #2563eb;
+  --btn-primary-hover: #1d4ed8;
+  --btn-secondary: #64748b;
+  --btn-secondary-hover: #475569;
+  --btn-success: #16a34a;
+  --btn-success-hover: #15803d;
+  --btn-danger: #dc2626;
+  --btn-danger-hover: #b91c1c;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #020617;
+    --foreground: #f8fafc;
+    --surface: #111827;
+    --surface-strong: #1f2937;
+    --surface-muted: #1e293b;
+    --text-muted: #9ca3af;
+    --border: rgba(148, 163, 184, 0.24);
+    --btn-primary: #3b82f6;
+    --btn-primary-hover: #2563eb;
+    --btn-secondary: #6b7280;
+    --btn-secondary-hover: #4b5563;
+    --btn-success: #22c55e;
+    --btn-success-hover: #16a34a;
+    --btn-danger: #f87171;
+    --btn-danger-hover: #ef4444;
+  }
+}
+
+button,
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-success,
+.btn-danger {
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  color: var(--foreground);
+  padding: 0.75rem 1rem;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: var(--btn-primary);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.btn-primary:hover {
+  background: var(--btn-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--btn-secondary);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.btn-secondary:hover {
+  background: var(--btn-secondary-hover);
+}
+
+.btn-success {
+  background: var(--btn-success);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.btn-success:hover {
+  background: var(--btn-success-hover);
+}
+
+.btn-danger {
+  background: var(--btn-danger);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.btn-danger:hover {
+  background: var(--btn-danger-hover);
+}
+
+.btn-circle {
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
