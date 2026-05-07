@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FaUsers, FaChartLine, FaClipboardList, FaShieldAlt, FaStar, FaMapMarkerAlt, FaUserCheck, FaExclamationTriangle } from "react-icons/fa";
 
@@ -26,6 +27,7 @@ const dropoutReasons = [
 ];
 
 export default function AdminPage() {
+  const router = useRouter();
   const [expandedSections, setExpandedSections] = useState({
     drivers: false,
     maps: false,
@@ -156,13 +158,25 @@ export default function AdminPage() {
 
           {expandedSections.maps && (
             <div className="mt-6 space-y-4">
-              <button className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700 transition">
+              <button
+                type="button"
+                onClick={() => router.push("/operator/map")}
+                className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700 transition"
+              >
                 Edit Service Zones
               </button>
-              <button className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700 transition">
+              <button
+                type="button"
+                onClick={() => router.push("/operator/map")}
+                className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700 transition"
+              >
                 Manage Route Restrictions
               </button>
-              <button className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700 transition">
+              <button
+                type="button"
+                onClick={() => router.push("/operator/map")}
+                className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700 transition"
+              >
                 View Live Trip Map
               </button>
             </div>
@@ -226,7 +240,11 @@ export default function AdminPage() {
                 <p className="text-sm text-slate-500">Approve new driver activity</p>
               </div>
             </div>
-            <button className="btn btn-primary mt-6 w-full rounded-3xl text-sm">
+            <button
+              type="button"
+              onClick={() => router.push("/operator")}
+              className="btn btn-primary mt-6 w-full rounded-3xl text-sm"
+            >
               Open
             </button>
           </div>
@@ -241,7 +259,11 @@ export default function AdminPage() {
                 <p className="text-sm text-slate-500">Update operator status</p>
               </div>
             </div>
-            <button className="btn btn-primary mt-6 w-full rounded-3xl text-sm">
+            <button
+              type="button"
+              onClick={() => router.push("/operator/profile")}
+              className="btn btn-primary mt-6 w-full rounded-3xl text-sm"
+            >
               Open
             </button>
           </div>
@@ -256,7 +278,11 @@ export default function AdminPage() {
                 <p className="text-sm text-slate-500">See earnings summaries</p>
               </div>
             </div>
-            <button className="btn btn-primary mt-6 w-full rounded-3xl text-sm">
+            <button
+              type="button"
+              onClick={() => router.push("/admin")}
+              className="btn btn-primary mt-6 w-full rounded-3xl text-sm"
+            >
               Open
             </button>
           </div>

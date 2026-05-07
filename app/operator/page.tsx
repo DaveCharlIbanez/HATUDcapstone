@@ -78,9 +78,7 @@ export default function DriverPage() {
 
   // Initialize map
   useEffect(() => {
-    if (map.current) return;
-
-    if (mapContainer.current) {
+    if (!map.current && mapContainer.current) {
       map.current = new maplibregl.Map({
         container: mapContainer.current,
         style: "https://tiles.openfreemap.org/styles/bright",
@@ -116,11 +114,10 @@ export default function DriverPage() {
           { enableHighAccuracy: true }
         );
       }
+    }
 
-      // Add commuter markers only when online
-      if (online) {
-        addCommuterMarkers();
-      }
+    if (map.current && online) {
+      addCommuterMarkers();
     }
   }, [online]);
 

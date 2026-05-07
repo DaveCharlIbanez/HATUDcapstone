@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FaUserTie, FaChartLine, FaWallet, FaStar, FaPhoneAlt, FaEnvelope, FaRoute, FaRegClock, FaCog } from "react-icons/fa";
 import { operatorProfile } from "@/lib/operatorProfile";
 
@@ -41,6 +42,16 @@ const rideHistory: RideSummary[] = [
 ];
 
 export default function OperatorProfilePage() {
+  const router = useRouter();
+
+  const handleCallRider = () => {
+    window.location.href = "tel:+639123456789";
+  };
+
+  const handleMessageSupport = () => {
+    window.location.href = "mailto:support@hatud.app";
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
@@ -140,13 +151,25 @@ export default function OperatorProfilePage() {
               </div>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                <button className="inline-flex items-center justify-center gap-2 rounded-3xl bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-700 border border-slate-700">
+                <button
+                  type="button"
+                  onClick={handleCallRider}
+                  className="inline-flex items-center justify-center gap-2 rounded-3xl bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-700 border border-slate-700"
+                >
                   <FaPhoneAlt /> Call Rider
                 </button>
-                <button className="inline-flex items-center justify-center gap-2 rounded-3xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500">
+                <button
+                  type="button"
+                  onClick={handleMessageSupport}
+                  className="inline-flex items-center justify-center gap-2 rounded-3xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
+                >
                   <FaEnvelope /> Message Support
                 </button>
-                <button className="inline-flex items-center justify-center gap-2 rounded-3xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                <button
+                  type="button"
+                  onClick={() => router.push("/operator/map")}
+                  className="inline-flex items-center justify-center gap-2 rounded-3xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                >
                   <FaRoute /> Update Route
                 </button>
               </div>
@@ -244,13 +267,25 @@ export default function OperatorProfilePage() {
             <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
               <p className="text-sm uppercase tracking-[.2em] text-slate-500">Quick actions</p>
               <div className="mt-4 space-y-3">
-                <button className="w-full rounded-3xl bg-slate-800 border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-700">
+                <button
+                  type="button"
+                  onClick={() => router.push("/operator")}
+                  className="w-full rounded-3xl bg-slate-800 border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-700"
+                >
                   Update profile details
                 </button>
-                <button className="w-full rounded-3xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500">
+                <button
+                  type="button"
+                  onClick={() => router.push("/operator/map")}
+                  className="w-full rounded-3xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
+                >
                   Manage vehicle
                 </button>
-                <button className="w-full rounded-3xl bg-slate-800 border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-700">
+                <button
+                  type="button"
+                  onClick={() => router.push("/operator")}
+                  className="w-full rounded-3xl bg-slate-800 border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-700"
+                >
                   View payout statement
                 </button>
               </div>

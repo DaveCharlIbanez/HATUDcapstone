@@ -9,6 +9,7 @@ export default function FeedbackPage() {
   const [hoverRating, setHoverRating] = useState(0);
   const [feedback, setFeedback] = useState("");
   const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
+  const [tip, setTip] = useState<number | null>(null);
   const router = useRouter();
 
   const reasons = [
@@ -141,7 +142,11 @@ export default function FeedbackPage() {
             {[10, 20, 50, 100].map((amount) => (
               <button
                 key={amount}
-                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                type="button"
+                onClick={() => setTip(amount)}
+                className={`flex-1 py-2 px-4 border rounded-lg transition-colors ${
+                  tip === amount ? "border-blue-500 bg-blue-100 text-blue-700" : "border-gray-300 bg-white text-gray-700 hover:border-blue-500 hover:bg-blue-50"
+                }`}
               >
                 ₱{amount}
               </button>
@@ -149,7 +154,11 @@ export default function FeedbackPage() {
           </div>
 
           <div className="mt-3 text-center">
-            <button className="text-blue-500 hover:underline text-sm">
+            <button
+              type="button"
+              onClick={() => setTip(null)}
+              className="text-blue-500 hover:underline text-sm"
+            >
               No tip
             </button>
           </div>

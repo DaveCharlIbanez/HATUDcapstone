@@ -1,8 +1,9 @@
 "use client"
 
+import Link from "next/link"
 import { useState, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
-import { FaGoogle, FaFacebookF} from "react-icons/fa6"
+import { FaGoogle, FaFacebookF } from "react-icons/fa6"
 
 export default function LoginPage() {
   const [phone, setPhone] = useState("")
@@ -37,10 +38,13 @@ export default function LoginPage() {
         {step === "phone" ? (
           <>
             <div className="mb-4 text-black-600">
-              <label htmlFor="username" className="block text-gray-600 mb-2 ">Username</label>
-              <input id="phone" type="tel" value= "Username"
+              <label htmlFor="phone" className="block text-gray-600 mb-2">Phone Number</label>
+              <input
+                id="phone"
+                type="tel"
+                value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="Username"
+                placeholder="Enter your phone"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black-600"
                 required
               />
@@ -99,9 +103,9 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-gray-600 mt-4">
           Don't have an account?{" "}
-          <a href="/signup" className="text-blue-500 hover:underline">
+          <Link href="/signup" className="text-blue-500 hover:underline">
             Sign up
-          </a>
+          </Link>
         </p>
       </form>
     </div>

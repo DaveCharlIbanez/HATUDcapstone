@@ -9,10 +9,20 @@ type PaymentMethod = "cash" | "card" | "wallet" | "promo";
 export default function PaymentPage() {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>("cash");
   const [promoCode, setPromoCode] = useState("");
+  const [promoApplied, setPromoApplied] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
   const router = useRouter();
+
+  const handleApplyPromo = () => {
+    if (!promoCode.trim()) {
+      alert("Please enter a promo code first.");
+      return;
+    }
+    setPromoApplied(true);
+    alert(`Promo code ${promoCode.toUpperCase()} applied!`);
+  };
 
   const paymentMethods = [
     { id: "cash", name: "Cash", icon: <FaMoneyBill />, description: "Pay with cash to driver" },
@@ -165,13 +175,17 @@ export default function PaymentPage() {
                 placeholder="Enter promo code"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+              <button
+              type="button"
+              onClick={handleApplyPromo}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
                 Apply
-              </button>
+            </button>
             </div>
 
             <div className="mt-3 text-sm text-gray-600">
-              Applied: SAVE10 (-₱10)
+              {promoApplied ? `Applied: SAVE10 (-₱10)` : "Enter a code then press Apply."}
             </div>
           </div>
         )}

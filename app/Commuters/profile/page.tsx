@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FaUser, FaHistory, FaCreditCard, FaCog, FaSignOutAlt, FaEdit, FaStar, FaMapMarkerAlt, FaClock, FaPhone, FaEnvelope, FaMapMarkedAlt } from "react-icons/fa";
 import { commuterProfile } from "@/lib/commuterProfile";
@@ -25,6 +26,7 @@ interface PaymentMethod {
 }
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"profile" | "history" | "payment" | "settings">("profile");
   const [isEditing, setIsEditing] = useState(false);
 
@@ -150,7 +152,11 @@ export default function ProfilePage() {
                   Settings
                 </button>
                 <hr className="my-4 border-slate-700" />
-                <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-rose-400 hover:bg-rose-500/10 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => router.push("/login")}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-rose-400 hover:bg-rose-500/10 transition-colors"
+                >
                   <FaSignOutAlt className="text-lg" />
                   Sign Out
                 </button>
@@ -183,7 +189,13 @@ export default function ProfilePage() {
                     <div className="w-32 h-32 bg-gradient-to-br from-sky-500 to-slate-700 rounded-full flex items-center justify-center mb-4 shadow-lg">
                       <FaUser className="text-4xl text-white" />
                     </div>
-                    <button className="text-sky-400 text-sm hover:text-sky-300 transition-colors">Change Photo</button>
+                    <button
+                  type="button"
+                  onClick={() => alert("Change photo feature is coming soon.")}
+                  className="text-sky-400 text-sm hover:text-sky-300 transition-colors"
+                >
+                  Change Photo
+                </button>
                   </div>
 
                   {/* Form */}
