@@ -27,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${geist.variable} ${geistMono.variable}`}>
         <ConvexProvider>
           <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors duration-200">
             <HeaderClient />
