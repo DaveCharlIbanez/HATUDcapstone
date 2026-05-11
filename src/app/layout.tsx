@@ -4,19 +4,20 @@ import HeaderClient from "@/src/components/HeaderClient";
 import { ConvexProvider } from "@/src/lib/convexClient";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const geist = Geist({
   subsets: ["latin"],
+  variable: "--font-geist-sans",
 });
 
 const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
   subsets: ["latin"],
+  variable: "--font-geist-mono",
 });
 
 export const metadata: Metadata = {
-  title: "Hatud Dashboard",
-  description: "Hatud admin and operator dashboard",
+  title: "Hatud",
+  description: "Ride-hailing app for Antiquenos",
+  icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 
 export default function RootLayout({
