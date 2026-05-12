@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FaUserTie, FaChartLine, FaWallet, FaStar, FaPhoneAlt, FaEnvelope, FaRoute, FaRegClock, FaCog } from "react-icons/fa";
-import { operatorProfile } from "@/lib/operatorProfile";
+import { operatorProfile } from "@/src/lib/operatorProfile";
 
 interface RideSummary {
   id: string;

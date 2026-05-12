@@ -5,7 +5,7 @@ import Link from "next/link";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { FaMapMarkerAlt, FaClock, FaStar, FaPhone, FaComments, FaToggleOn, FaToggleOff, FaUserTie, FaCheckCircle } from "react-icons/fa";
-import { operatorProfile } from "@/lib/operatorProfile";
+import { operatorProfile } from "@/src/lib/operatorProfile";
 
 interface CommutRide {
   id: string;

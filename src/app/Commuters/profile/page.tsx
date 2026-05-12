@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FaUser, FaHistory, FaCreditCard, FaCog, FaSignOutAlt, FaEdit, FaStar, FaMapMarkerAlt, FaClock, FaPhone, FaEnvelope, FaMapMarkedAlt } from "react-icons/fa";
-import { commuterProfile } from "@/lib/commuterProfile";
+import { commuterProfile } from "@/src/lib/commuterProfile";
 
 interface Ride {
   id: string;
