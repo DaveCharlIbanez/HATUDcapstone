@@ -1,5 +1,7 @@
 export async function searchPlace(query: string): Promise<any[]> {
-  if (!query.trim()) return [];
+  if (!query.trim()) {
+    return [];
+  }
 
   try {
     const response = await fetch(
@@ -13,7 +15,10 @@ export async function searchPlace(query: string): Promise<any[]> {
   }
 }
 
-export async function getRoute(start: [number, number], end: [number, number]): Promise<any> {
+export async function getRoute(
+  start: [number, number],
+  end: [number, number]
+): Promise<any> {
   try {
     const response = await fetch(
       `https://router.project-osrm.org/route/v1/driving/${start[0]},${start[1]};${end[0]},${end[1]}?overview=full&geometries=geojson`

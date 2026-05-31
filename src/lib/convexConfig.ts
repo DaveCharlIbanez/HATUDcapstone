@@ -3,7 +3,7 @@ export const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL ?? "";
 export function getConvexUrl(): string {
   if (!convexUrl) {
     throw new Error(
-      "NEXT_PUBLIC_CONVEX_URL is not set. Add it to .env.local or run `npx convex dev`.",
+      "NEXT_PUBLIC_CONVEX_URL is not set. Add it to .env.local or run `npx convex dev`."
     );
   }
   return convexUrl;

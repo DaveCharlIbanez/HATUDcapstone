@@ -14,15 +14,11 @@
     "noUncheckedIndexedAccess": true,
     "checkJs": true,
     /* Bundled projects */
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "ES2022"
-    ],
+    "lib": ["dom", "dom.iterable", "ES2022"],
     "noEmit": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "plugins": [
       {
         "name": "next"
@@ -32,9 +28,8 @@
     /* Path Aliases */
     "baseUrl": ".",
     "paths": {
-      "~/*": [
-        "./src/*"
-      ]
+      "~/*": ["./src/*"],
+      "@/*": ["./src/*"]
     }
   },
   "include": [
@@ -43,12 +38,8 @@
     "**/*.tsx",
     "**/*.cjs",
     "**/*.js",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    ".next",
-    "out",
-    "generated"
-  ]
+  "exclude": ["node_modules", ".next", "out", "generated"]
 }

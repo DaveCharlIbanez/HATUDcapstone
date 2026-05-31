@@ -3,37 +3,50 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { FaUser, FaHistory, FaCreditCard, FaCog, FaSignOutAlt, FaEdit, FaStar, FaMapMarkerAlt, FaClock, FaPhone, FaEnvelope, FaMapMarkedAlt } from "react-icons/fa";
-import { commuterProfile } from "@/src/lib/commuterProfile";
+import {
+  FaCog,
+  FaCreditCard,
+  FaEdit,
+  FaHistory,
+  FaMapMarkedAlt,
+  FaMapMarkerAlt,
+  FaSignOutAlt,
+  FaStar,
+  FaUser,
+} from "react-icons/fa";
+import { commuterProfile } from "@/lib/commuterProfile";
+import { useAuth } from "@/lib/authContext";
 
 interface Ride {
-  id: string;
+  cost: number;
   date: string;
   from: string;
+  id: string;
+  rating?: number;
+  status: "completed" | "cancelled";
   to: string;
   vehicle: string;
-  cost: number;
-  status: "completed" | "cancelled";
-  rating?: number;
 }
 
 interface PaymentMethod {
-  id: string;
-  type: "card" | "cash";
-  last4?: string;
   brand?: string;
+  id: string;
   isDefault: boolean;
+  last4?: string;
+  type: "card" | "cash";
 }
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"profile" | "history" | "payment" | "settings">("profile");
+  const { logout } = useAuth();
+  const [activeTab, setActiveTab] = useState<
+    "profile" | "history" | "payment" | "settings"
+  >("profile");
   const [isEditing, setIsEditing] = useState(false);
 
   // Mock user data
   const [user, setUser] = useState(commuterProfile);
   const [editForm, setEditForm] = useState(user);
-
 
   const rideHistory: Ride[] = [
     {
@@ -44,7 +57,7 @@ export default function ProfilePage() {
       vehicle: "Tricycle",
       cost: 75,
       status: "completed",
-      rating: 5
+      rating: 5,
     },
     {
       id: "2",
@@ -54,7 +67,7 @@ export default function ProfilePage() {
       vehicle: "Skylab",
       cost: 45,
       status: "completed",
-      rating: 4
+      rating: 4,
     },
     {
       id: "3",
@@ -63,8 +76,8 @@ export default function ProfilePage() {
       to: "Libertad",
       vehicle: "Electric",
       cost: 85,
-      status: "cancelled"
-    }
+      status: "cancelled",
+    },
   ];
 
   const paymentMethods: PaymentMethod[] = [
@@ -73,13 +86,13 @@ export default function ProfilePage() {
       type: "card",
       last4: "4567",
       brand: "Visa",
-      isDefault: true
+      isDefault: true,
     },
     {
       id: "2",
       type: "cash",
-      isDefault: false
-    }
+      isDefault: false,
+    },
   ];
 
   const handleSaveProfile = () => {
@@ -95,67 +108,80 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       {/* Header */}
-      <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-lg">
-        <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="border-slate-800 border-b bg-slate-900/50 backdrop-blur-lg">
+        <div className="mx-auto flex max-w-4xl flex-col gap-3 px-4 py-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">My Profile</h1>
-            <p className="text-sm text-slate-400 mt-1">Rider • {commuterProfile.totalRides} rides • {commuterProfile.rating} ★</p>
+            <h1 className="font-bold text-3xl text-white">My Profile</h1>
+            <p className="mt-1 text-slate-400 text-sm">
+              Rider • {commuterProfile.totalRides} rides •{" "}
+              {commuterProfile.rating} ★
+            </p>
           </div>
-          <Link href="/Commuters" className="inline-flex items-center gap-2 rounded-full bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-400 transition-colors w-fit">
+          <Link
+            className="inline-flex w-fit items-center gap-2 rounded-full bg-sky-500 px-5 py-2.5 font-semibold text-sm text-white transition-colors hover:bg-sky-400"
+            href="/Commuters"
+          >
             <FaMapMarkedAlt />
             Book Ride
           </Link>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-
+      <div className="mx-auto max-w-4xl px-4 py-8">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
           {/* Sidebar */}
           <div className="md:col-span-1">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 backdrop-blur sticky top-20">
+            <div className="sticky top-20 rounded-2xl border border-slate-800 bg-slate-900/50 p-4 backdrop-blur">
               <nav className="space-y-2">
                 <button
-                  onClick={() => setActiveTab("profile")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${
-                    activeTab === "profile" ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-slate-800"
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                    activeTab === "profile"
+                      ? "bg-sky-500/20 text-sky-300"
+                      : "text-slate-300 hover:bg-slate-800"
                   }`}
+                  onClick={() => setActiveTab("profile")}
                 >
                   <FaUser className="text-lg" />
                   Profile
                 </button>
                 <button
-                  onClick={() => setActiveTab("history")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${
-                    activeTab === "history" ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-slate-800"
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                    activeTab === "history"
+                      ? "bg-sky-500/20 text-sky-300"
+                      : "text-slate-300 hover:bg-slate-800"
                   }`}
+                  onClick={() => setActiveTab("history")}
                 >
                   <FaHistory className="text-lg" />
                   Ride History
                 </button>
                 <button
-                  onClick={() => setActiveTab("payment")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${
-                    activeTab === "payment" ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-slate-800"
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                    activeTab === "payment"
+                      ? "bg-sky-500/20 text-sky-300"
+                      : "text-slate-300 hover:bg-slate-800"
                   }`}
+                  onClick={() => setActiveTab("payment")}
                 >
                   <FaCreditCard className="text-lg" />
                   Payment
                 </button>
                 <button
-                  onClick={() => setActiveTab("settings")}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${
-                    activeTab === "settings" ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-slate-800"
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                    activeTab === "settings"
+                      ? "bg-sky-500/20 text-sky-300"
+                      : "text-slate-300 hover:bg-slate-800"
                   }`}
+                  onClick={() => setActiveTab("settings")}
                 >
                   <FaCog className="text-lg" />
                   Settings
                 </button>
                 <hr className="my-4 border-slate-700" />
                 <button
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-rose-400 transition-colors hover:bg-rose-500/10"
+                  onClick={logout}
                   type="button"
-                  onClick={() => router.push("/login")}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-rose-400 hover:bg-rose-500/10 transition-colors"
                 >
                   <FaSignOutAlt className="text-lg" />
                   Sign Out
@@ -166,16 +192,17 @@ export default function ProfilePage() {
 
           {/* Main Content */}
           <div className="md:col-span-3">
-
             {/* Profile Tab */}
             {activeTab === "profile" && (
               <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 backdrop-blur">
-                <div className="flex items-center justify-between mb-8">
-                  <h2 className="text-2xl font-bold text-white">Personal Information</h2>
+                <div className="mb-8 flex items-center justify-between">
+                  <h2 className="font-bold text-2xl text-white">
+                    Personal Information
+                  </h2>
                   {!isEditing && (
                     <button
+                      className="flex items-center gap-2 rounded-xl bg-sky-500 px-5 py-2.5 font-semibold text-sm text-white transition-colors hover:bg-sky-400"
                       onClick={() => setIsEditing(true)}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 text-white rounded-xl hover:bg-sky-400 transition-colors text-sm font-semibold"
                     >
                       <FaEdit />
                       Edit Profile
@@ -183,65 +210,87 @@ export default function ProfilePage() {
                   )}
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-8">
+                <div className="flex flex-col gap-8 md:flex-row">
                   {/* Avatar */}
                   <div className="flex flex-col items-center">
-                    <div className="w-32 h-32 bg-gradient-to-br from-sky-500 to-slate-700 rounded-full flex items-center justify-center mb-4 shadow-lg">
+                    <div className="mb-4 flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-slate-700 shadow-lg">
                       <FaUser className="text-4xl text-white" />
                     </div>
                     <button
-                  type="button"
-                  onClick={() => alert("Change photo feature is coming soon.")}
-                  className="text-sky-400 text-sm hover:text-sky-300 transition-colors"
-                >
-                  Change Photo
-                </button>
+                      className="text-sky-400 text-sm transition-colors hover:text-sky-300"
+                      onClick={() =>
+                        alert("Change photo feature is coming soon.")
+                      }
+                      type="button"
+                    >
+                      Change Photo
+                    </button>
                   </div>
 
                   {/* Form */}
                   <div className="flex-1 space-y-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">Full Name</label>
+                        <label className="mb-2 block font-semibold text-slate-300 text-sm">
+                          Full Name
+                        </label>
                         {isEditing ? (
                           <input
+                            className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-2.5 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, name: e.target.value })
+                            }
                             type="text"
                             value={editForm.name}
-                            onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-                            className="w-full px-4 py-2.5 border border-slate-700 rounded-xl bg-slate-900/80 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
                           />
                         ) : (
                           <p className="text-slate-100">{user.name}</p>
                         )}
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">Email</label>
+                        <label className="mb-2 block font-semibold text-slate-300 text-sm">
+                          Email
+                        </label>
                         {isEditing ? (
                           <input
+                            className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-2.5 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                email: e.target.value,
+                              })
+                            }
                             type="email"
                             value={editForm.email}
-                            onChange={(e) => setEditForm({...editForm, email: e.target.value})}
-                            className="w-full px-4 py-2.5 border border-slate-700 rounded-xl bg-slate-900/80 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
                           />
                         ) : (
                           <p className="text-slate-100">{user.email}</p>
                         )}
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">Phone</label>
+                        <label className="mb-2 block font-semibold text-slate-300 text-sm">
+                          Phone
+                        </label>
                         {isEditing ? (
                           <input
+                            className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-2.5 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                phone: e.target.value,
+                              })
+                            }
                             type="tel"
                             value={editForm.phone}
-                            onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
-                            className="w-full px-4 py-2.5 border border-slate-700 rounded-xl bg-slate-900/80 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
                           />
                         ) : (
                           <p className="text-slate-100">{user.phone}</p>
                         )}
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">Member Since</label>
+                        <label className="mb-2 block font-semibold text-slate-300 text-sm">
+                          Member Since
+                        </label>
                         <p className="text-slate-100">Jan 2024</p>
                       </div>
                     </div>
@@ -249,14 +298,14 @@ export default function ProfilePage() {
                     {isEditing && (
                       <div className="flex gap-3 pt-4">
                         <button
+                          className="flex-1 rounded-xl bg-sky-500 px-5 py-2.5 font-semibold text-white transition-colors hover:bg-sky-400"
                           onClick={handleSaveProfile}
-                          className="flex-1 px-5 py-2.5 bg-sky-500 text-white font-semibold rounded-xl hover:bg-sky-400 transition-colors"
                         >
                           Save Changes
                         </button>
                         <button
+                          className="flex-1 rounded-xl border border-slate-700 px-5 py-2.5 font-semibold text-slate-300 transition-colors hover:bg-slate-800"
                           onClick={handleCancelEdit}
-                          className="flex-1 px-5 py-2.5 border border-slate-700 text-slate-300 font-semibold rounded-xl hover:bg-slate-800 transition-colors"
                         >
                           Cancel
                         </button>
@@ -270,41 +319,58 @@ export default function ProfilePage() {
             {/* Ride History Tab */}
             {activeTab === "history" && (
               <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 backdrop-blur">
-                <h2 className="text-2xl font-bold text-white mb-6">Ride History</h2>
+                <h2 className="mb-6 font-bold text-2xl text-white">
+                  Ride History
+                </h2>
                 <div className="space-y-4">
                   {rideHistory.map((ride) => (
-                    <div key={ride.id} className="border border-slate-700 rounded-xl p-5 bg-slate-800/30 hover:bg-slate-800/50 transition-colors">
-                      <div className="flex items-center justify-between mb-4">
+                    <div
+                      className="rounded-xl border border-slate-700 bg-slate-800/30 p-5 transition-colors hover:bg-slate-800/50"
+                      key={ride.id}
+                    >
+                      <div className="mb-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            ride.status === 'completed' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
-                          }`}>
+                          <div
+                            className={`rounded-full px-3 py-1 font-semibold text-xs ${
+                              ride.status === "completed"
+                                ? "bg-emerald-500/20 text-emerald-300"
+                                : "bg-rose-500/20 text-rose-300"
+                            }`}
+                          >
                             {ride.status}
                           </div>
-                          <span className="text-sm text-slate-400">{ride.date}</span>
+                          <span className="text-slate-400 text-sm">
+                            {ride.date}
+                          </span>
                         </div>
                         <div className="text-right">
-                          <div className="font-semibold text-slate-100">₱{ride.cost}</div>
-                          <div className="text-sm text-slate-400">{ride.vehicle}</div>
+                          <div className="font-semibold text-slate-100">
+                            ₱{ride.cost}
+                          </div>
+                          <div className="text-slate-400 text-sm">
+                            {ride.vehicle}
+                          </div>
                         </div>
                       </div>
-                      <div className="space-y-2 mb-3">
-                        <div className="flex items-center gap-2 text-sm text-slate-300">
+                      <div className="mb-3 space-y-2">
+                        <div className="flex items-center gap-2 text-slate-300 text-sm">
                           <FaMapMarkerAlt className="text-emerald-400" />
                           <span>{ride.from}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-slate-300">
+                        <div className="flex items-center gap-2 text-slate-300 text-sm">
                           <FaMapMarkerAlt className="text-rose-400" />
                           <span>{ride.to}</span>
                         </div>
                       </div>
                       {ride.rating && (
-                        <div className="flex items-center gap-1 pt-3 border-t border-slate-700">
-                          <span className="text-sm text-slate-400">Rating:</span>
+                        <div className="flex items-center gap-1 border-slate-700 border-t pt-3">
+                          <span className="text-slate-400 text-sm">
+                            Rating:
+                          </span>
                           {[...Array(5)].map((_, i) => (
                             <FaStar
+                              className={`text-sm ${i < ride.rating! ? "text-amber-400" : "text-slate-600"}`}
                               key={i}
-                              className={`text-sm ${i < ride.rating! ? 'text-amber-400' : 'text-slate-600'}`}
                             />
                           ))}
                         </div>
@@ -318,39 +384,50 @@ export default function ProfilePage() {
             {/* Payment Tab */}
             {activeTab === "payment" && (
               <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 backdrop-blur">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-white">Payment Methods</h2>
-                  <button className="px-4 py-2.5 bg-sky-500 text-white text-sm font-semibold rounded-xl hover:bg-sky-400 transition-colors">
+                <div className="mb-6 flex items-center justify-between">
+                  <h2 className="font-bold text-2xl text-white">
+                    Payment Methods
+                  </h2>
+                  <button className="rounded-xl bg-sky-500 px-4 py-2.5 font-semibold text-sm text-white transition-colors hover:bg-sky-400">
                     + Add Method
                   </button>
                 </div>
                 <div className="space-y-4">
                   {paymentMethods.map((method) => (
-                    <div key={method.id} className="flex items-center justify-between p-5 border border-slate-700 rounded-xl bg-slate-800/30">
+                    <div
+                      className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800/30 p-5"
+                      key={method.id}
+                    >
                       <div className="flex items-center gap-4">
-                        {method.type === 'card' ? (
+                        {method.type === "card" ? (
                           <FaCreditCard className="text-2xl text-sky-400" />
                         ) : (
-                          <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center">
-                            <span className="text-emerald-400 font-bold">₱</span>
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20">
+                            <span className="font-bold text-emerald-400">
+                              ₱
+                            </span>
                           </div>
                         )}
                         <div>
                           <div className="font-semibold text-slate-100">
-                            {method.type === 'card' ? `${method.brand} •••• ${method.last4}` : 'Cash'}
+                            {method.type === "card"
+                              ? `${method.brand} •••• ${method.last4}`
+                              : "Cash"}
                           </div>
                           {method.isDefault && (
-                            <span className="text-xs text-sky-400">Default Payment</span>
+                            <span className="text-sky-400 text-xs">
+                              Default Payment
+                            </span>
                           )}
                         </div>
                       </div>
                       <div className="flex gap-2">
                         {!method.isDefault && (
-                          <button className="px-3 py-1 text-sm text-sky-400 hover:bg-sky-500/10 rounded-lg transition-colors">
+                          <button className="rounded-lg px-3 py-1 text-sky-400 text-sm transition-colors hover:bg-sky-500/10">
                             Set Default
                           </button>
                         )}
-                        <button className="px-3 py-1 text-sm text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors">
+                        <button className="rounded-lg px-3 py-1 text-rose-400 text-sm transition-colors hover:bg-rose-500/10">
                           Remove
                         </button>
                       </div>
@@ -363,61 +440,84 @@ export default function ProfilePage() {
             {/* Settings Tab */}
             {activeTab === "settings" && (
               <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 backdrop-blur">
-                <h2 className="text-2xl font-bold text-white mb-6">Settings</h2>
+                <h2 className="mb-6 font-bold text-2xl text-white">Settings</h2>
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30 border border-slate-700">
+                  <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800/30 p-4">
                     <div>
-                      <h3 className="font-semibold text-slate-100">Notifications</h3>
-                      <p className="text-sm text-slate-400">Receive ride updates and promotions</p>
+                      <h3 className="font-semibold text-slate-100">
+                        Notifications
+                      </h3>
+                      <p className="text-slate-400 text-sm">
+                        Receive ride updates and promotions
+                      </p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" defaultChecked />
-                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-500/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+                    <label className="relative inline-flex cursor-pointer items-center">
+                      <input
+                        className="peer sr-only"
+                        defaultChecked
+                        type="checkbox"
+                      />
+                      <div className="peer h-6 w-11 rounded-full bg-slate-700 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-sky-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-500/30" />
                     </label>
                   </div>
 
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30 border border-slate-700">
+                  <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800/30 p-4">
                     <div>
-                      <h3 className="font-semibold text-slate-100">Location Services</h3>
-                      <p className="text-sm text-slate-400">Allow access to your location</p>
+                      <h3 className="font-semibold text-slate-100">
+                        Location Services
+                      </h3>
+                      <p className="text-slate-400 text-sm">
+                        Allow access to your location
+                      </p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" defaultChecked />
-                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-500/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+                    <label className="relative inline-flex cursor-pointer items-center">
+                      <input
+                        className="peer sr-only"
+                        defaultChecked
+                        type="checkbox"
+                      />
+                      <div className="peer h-6 w-11 rounded-full bg-slate-700 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-sky-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-500/30" />
                     </label>
                   </div>
 
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30 border border-slate-700">
+                  <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800/30 p-4">
                     <div>
-                      <h3 className="font-semibold text-slate-100">Dark Mode</h3>
-                      <p className="text-sm text-slate-400">Currently enabled</p>
+                      <h3 className="font-semibold text-slate-100">
+                        Dark Mode
+                      </h3>
+                      <p className="text-slate-400 text-sm">
+                        Currently enabled
+                      </p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" defaultChecked />
-                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-500/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+                    <label className="relative inline-flex cursor-pointer items-center">
+                      <input
+                        className="peer sr-only"
+                        defaultChecked
+                        type="checkbox"
+                      />
+                      <div className="peer h-6 w-11 rounded-full bg-slate-700 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-sky-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-500/30" />
                     </label>
                   </div>
 
                   <hr className="border-slate-700" />
 
                   <div className="space-y-2">
-                    <button className="w-full text-left px-4 py-3 text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors font-medium">
+                    <button className="w-full rounded-lg px-4 py-3 text-left font-medium text-rose-400 transition-colors hover:bg-rose-500/10">
                       Delete Account
                     </button>
-                    <button className="w-full text-left px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors">
+                    <button className="w-full rounded-lg px-4 py-3 text-left text-slate-300 transition-colors hover:bg-slate-800">
                       Privacy Policy
                     </button>
-                    <button className="w-full text-left px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors">
+                    <button className="w-full rounded-lg px-4 py-3 text-left text-slate-300 transition-colors hover:bg-slate-800">
                       Terms of Service
                     </button>
-                    <button className="w-full text-left px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors">
+                    <button className="w-full rounded-lg px-4 py-3 text-left text-slate-300 transition-colors hover:bg-slate-800">
                       Help & Support
                     </button>
                   </div>
                 </div>
               </div>
             )}
-
           </div>
         </div>
       </div>

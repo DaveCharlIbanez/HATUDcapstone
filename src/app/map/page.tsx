@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
+import { useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 export default function MapPage() {
@@ -14,7 +14,9 @@ export default function MapPage() {
   const [dropoff, setDropoff] = useState("");
 
   useEffect(() => {
-    if (map.current) return;
+    if (map.current) {
+      return;
+    }
 
     if (mapContainer.current) {
       map.current = new maplibregl.Map({
@@ -53,52 +55,48 @@ export default function MapPage() {
   }, []);
 
   return (
-    <div className="relative w-full h-screen">
-      
+    <div className="relative h-screen w-full">
       {/* MAP */}
-      <div ref={mapContainer} className="w-full h-full" />
+      <div className="h-full w-full" ref={mapContainer} />
 
       {/* UI PANEL */}
-      <div className="absolute bottom-0 w-full flex justify-center pointer-events-none">
+      <div className="pointer-events-none absolute bottom-0 flex w-full justify-center">
         <div
-          className={`w-full max-w-md bg-white rounded-t-3xl shadow-xl transition-all duration-300 pointer-events-auto
-          ${open ? "h-[70%]" : "h-[140px]"}`}
+          className={`pointer-events-auto w-full max-w-md rounded-t-3xl bg-white shadow-xl transition-all duration-300 ${open ? "h-[70%]" : "h-[140px]"}`}
         >
-
           {/* HANDLE */}
           <div
-            className="flex justify-center py-2 cursor-pointer"
+            className="flex cursor-pointer justify-center py-2"
             onClick={() => setOpen(!open)}
           >
-            <div className="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+            <div className="h-1.5 w-12 rounded-full bg-gray-300" />
           </div>
 
           {/* CONTENT */}
-          <div className="px-4 pb-4 overflow-y-auto h-full">
-
+          <div className="h-full overflow-y-auto px-4 pb-4">
             {/* PICKUP */}
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-3 h-3 mt-2 bg-green-500 rounded-full"></div>
+            <div className="mb-4 flex items-start gap-3">
+              <div className="mt-2 h-3 w-3 rounded-full bg-green-500" />
               <div className="w-full">
-                <p className="text-xs text-gray-400">PICKUP</p>
+                <p className="text-gray-400 text-xs">PICKUP</p>
                 <input
-                  value={pickup}
+                  className="w-full border-gray-200 border-b text-sm outline-none focus:border-black"
                   onChange={(e) => setPickup(e.target.value)}
-                  className="w-full text-sm outline-none border-b border-gray-200 focus:border-black"
+                  value={pickup}
                 />
               </div>
             </div>
 
             {/* DROP OFF */}
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-3 h-3 mt-2 bg-red-500 rounded-full"></div>
+            <div className="mb-4 flex items-start gap-3">
+              <div className="mt-2 h-3 w-3 rounded-full bg-red-500" />
               <div className="w-full">
-                <p className="text-xs text-gray-400">DROP-OFF</p>
+                <p className="text-gray-400 text-xs">DROP-OFF</p>
                 <input
-                  value={dropoff}
+                  className="w-full border-gray-200 border-b text-sm outline-none focus:border-black"
                   onChange={(e) => setDropoff(e.target.value)}
                   placeholder="Where to?"
-                  className="w-full text-sm outline-none border-b border-gray-200 focus:border-black"
+                  value={dropoff}
                 />
               </div>
             </div>
@@ -108,22 +106,14 @@ export default function MapPage() {
               <div className="mt-4 space-y-3 text-sm">
                 <p className="text-gray-400">POPULAR LOCATIONS</p>
 
-                <button className="w-full text-left p-2 hover:bg-gray-100 rounded-lg">
-                 
-                </button>
-                <button className="w-full text-left p-2 hover:bg-gray-100 rounded-lg">
-                 
-                </button>
-                <button className="w-full text-left p-2 hover:bg-gray-100 rounded-lg">
-             
-                </button>
+                <button className="w-full rounded-lg p-2 text-left hover:bg-gray-100"></button>
+                <button className="w-full rounded-lg p-2 text-left hover:bg-gray-100"></button>
+                <button className="w-full rounded-lg p-2 text-left hover:bg-gray-100"></button>
               </div>
             )}
-
           </div>
         </div>
       </div>
-
     </div>
   );
 }

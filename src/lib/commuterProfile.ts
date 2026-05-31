@@ -1,11 +1,11 @@
 export interface CommuterProfile {
-  name: string;
-  email: string;
-  phone: string;
   avatar: string;
+  email: string;
   joinDate: string;
-  totalRides: number;
+  name: string;
+  phone: string;
   rating: number;
+  totalRides: number;
   totalSpent: number;
 }
 

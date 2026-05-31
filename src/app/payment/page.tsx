@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { FaCreditCard, FaMoneyBill, FaWallet, FaGift } from "react-icons/fa";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { FaCreditCard, FaGift, FaMoneyBill, FaWallet } from "react-icons/fa";
 
 type PaymentMethod = "cash" | "card" | "wallet" | "promo";
 
@@ -25,10 +25,30 @@ export default function PaymentPage() {
   };
 
   const paymentMethods = [
-    { id: "cash", name: "Cash", icon: <FaMoneyBill />, description: "Pay with cash to driver" },
-    { id: "card", name: "Credit/Debit Card", icon: <FaCreditCard />, description: "Pay with card" },
-    { id: "wallet", name: "Digital Wallet", icon: <FaWallet />, description: "Pay with wallet balance" },
-    { id: "promo", name: "Promo Code", icon: <FaGift />, description: "Use promo code" },
+    {
+      id: "cash",
+      name: "Cash",
+      icon: <FaMoneyBill />,
+      description: "Pay with cash to driver",
+    },
+    {
+      id: "card",
+      name: "Credit/Debit Card",
+      icon: <FaCreditCard />,
+      description: "Pay with card",
+    },
+    {
+      id: "wallet",
+      name: "Digital Wallet",
+      icon: <FaWallet />,
+      description: "Pay with wallet balance",
+    },
+    {
+      id: "promo",
+      name: "Promo Code",
+      icon: <FaGift />,
+      description: "Use promo code",
+    },
   ];
 
   const rideDetails = {
@@ -47,29 +67,28 @@ export default function PaymentPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-md mx-auto">
-
+      <div className="mx-auto max-w-md">
         {/* HEADER */}
-        <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-          <h1 className="text-xl font-semibold mb-2">Payment</h1>
-          <div className="text-sm text-gray-600">
-            <div className="flex justify-between mb-1">
+        <div className="mb-4 rounded-lg bg-white p-4 shadow-sm">
+          <h1 className="mb-2 font-semibold text-xl">Payment</h1>
+          <div className="text-gray-600 text-sm">
+            <div className="mb-1 flex justify-between">
               <span>Distance:</span>
               <span>{rideDetails.distance}</span>
             </div>
-            <div className="flex justify-between mb-1">
+            <div className="mb-1 flex justify-between">
               <span>Duration:</span>
               <span>{rideDetails.duration}</span>
             </div>
-            <div className="flex justify-between mb-1">
+            <div className="mb-1 flex justify-between">
               <span>Fare:</span>
               <span>₱{rideDetails.fare}</span>
             </div>
-            <div className="flex justify-between mb-1 text-green-600">
+            <div className="mb-1 flex justify-between text-green-600">
               <span>Discount:</span>
               <span>-₱{rideDetails.discount}</span>
             </div>
-            <div className="flex justify-between font-semibold text-lg border-t pt-2">
+            <div className="flex justify-between border-t pt-2 font-semibold text-lg">
               <span>Total:</span>
               <span>₱{rideDetails.total}</span>
             </div>
@@ -77,25 +96,27 @@ export default function PaymentPage() {
         </div>
 
         {/* PAYMENT METHODS */}
-        <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-          <h2 className="text-lg font-semibold mb-3">Payment Method</h2>
+        <div className="mb-4 rounded-lg bg-white p-4 shadow-sm">
+          <h2 className="mb-3 font-semibold text-lg">Payment Method</h2>
 
           <div className="space-y-3">
             {paymentMethods.map((method) => (
               <button
-                key={method.id}
-                onClick={() => setSelectedMethod(method.id as PaymentMethod)}
-                className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
+                className={`w-full rounded-lg border-2 p-3 text-left transition-all ${
                   selectedMethod === method.id
                     ? "border-blue-500 bg-blue-50"
                     : "border-gray-200 bg-white"
                 }`}
+                key={method.id}
+                onClick={() => setSelectedMethod(method.id as PaymentMethod)}
               >
                 <div className="flex items-center gap-3">
-                  <div className="text-xl text-gray-600">{method.icon}</div>
+                  <div className="text-gray-600 text-xl">{method.icon}</div>
                   <div>
                     <div className="font-medium">{method.name}</div>
-                    <div className="text-sm text-gray-500">{method.description}</div>
+                    <div className="text-gray-500 text-sm">
+                      {method.description}
+                    </div>
                   </div>
                 </div>
               </button>
@@ -105,40 +126,44 @@ export default function PaymentPage() {
 
         {/* CARD DETAILS */}
         {selectedMethod === "card" && (
-          <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-            <h3 className="text-lg font-semibold mb-3">Card Details</h3>
+          <div className="mb-4 rounded-lg bg-white p-4 shadow-sm">
+            <h3 className="mb-3 font-semibold text-lg">Card Details</h3>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Card Number</label>
+                <label className="mb-1 block font-medium text-sm">
+                  Card Number
+                </label>
                 <input
-                  type="text"
-                  value={cardNumber}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   onChange={(e) => setCardNumber(e.target.value)}
                   placeholder="1234 5678 9012 3456"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  type="text"
+                  value={cardNumber}
                 />
               </div>
 
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-sm font-medium mb-1">Expiry Date</label>
+                  <label className="mb-1 block font-medium text-sm">
+                    Expiry Date
+                  </label>
                   <input
-                    type="text"
-                    value={expiry}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     onChange={(e) => setExpiry(e.target.value)}
                     placeholder="MM/YY"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    type="text"
+                    value={expiry}
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-sm font-medium mb-1">CVV</label>
+                  <label className="mb-1 block font-medium text-sm">CVV</label>
                   <input
-                    type="text"
-                    value={cvv}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     onChange={(e) => setCvv(e.target.value)}
                     placeholder="123"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    type="text"
+                    value={cvv}
                   />
                 </div>
               </div>
@@ -148,15 +173,15 @@ export default function PaymentPage() {
 
         {/* WALLET BALANCE */}
         {selectedMethod === "wallet" && (
-          <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-            <div className="flex justify-between items-center">
+          <div className="mb-4 rounded-lg bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between">
               <div>
                 <div className="font-medium">Wallet Balance</div>
-                <div className="text-sm text-gray-500">Available: ₱500.00</div>
+                <div className="text-gray-500 text-sm">Available: ₱500.00</div>
               </div>
               <div className="text-right">
-                <div className="text-lg font-bold">₱{rideDetails.total}</div>
-                <div className="text-sm text-green-600">Sufficient balance</div>
+                <div className="font-bold text-lg">₱{rideDetails.total}</div>
+                <div className="text-green-600 text-sm">Sufficient balance</div>
               </div>
             </div>
           </div>
@@ -164,44 +189,46 @@ export default function PaymentPage() {
 
         {/* PROMO CODE */}
         {selectedMethod === "promo" && (
-          <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-            <h3 className="text-lg font-semibold mb-3">Promo Code</h3>
+          <div className="mb-4 rounded-lg bg-white p-4 shadow-sm">
+            <h3 className="mb-3 font-semibold text-lg">Promo Code</h3>
 
             <div className="flex gap-2">
               <input
-                type="text"
-                value={promoCode}
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 onChange={(e) => setPromoCode(e.target.value)}
                 placeholder="Enter promo code"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                type="text"
+                value={promoCode}
               />
               <button
-              type="button"
-              onClick={handleApplyPromo}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-            >
+                className="rounded-lg bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
+                onClick={handleApplyPromo}
+                type="button"
+              >
                 Apply
-            </button>
+              </button>
             </div>
 
-            <div className="mt-3 text-sm text-gray-600">
-              {promoApplied ? `Applied: SAVE10 (-₱10)` : "Enter a code then press Apply."}
+            <div className="mt-3 text-gray-600 text-sm">
+              {promoApplied
+                ? "Applied: SAVE10 (-₱10)"
+                : "Enter a code then press Apply."}
             </div>
           </div>
         )}
 
         {/* PAY BUTTON */}
         <button
+          className="w-full rounded-lg bg-black py-4 font-semibold text-lg text-white transition-colors hover:bg-gray-800"
           onClick={handlePayment}
-          className="w-full bg-black text-white py-4 rounded-lg font-semibold text-lg hover:bg-gray-800 transition-colors"
         >
           Pay ₱{rideDetails.total}
         </button>
 
         {/* BACK BUTTON */}
         <button
+          className="mt-3 w-full text-gray-600 hover:text-gray-800"
           onClick={() => router.back()}
-          className="w-full mt-3 text-gray-600 hover:text-gray-800"
         >
           ← Back
         </button>

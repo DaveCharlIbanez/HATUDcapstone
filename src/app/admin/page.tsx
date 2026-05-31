@@ -1,146 +1,238 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useQuery } from "convex/react";
 import Link from "next/link";
-import { FaUsers, FaChartLine, FaClipboardList, FaShieldAlt, FaStar, FaMapMarkerAlt, FaUserCheck, FaExclamationTriangle } from "react-icons/fa";
-
-const adminMetrics = [
-  { label: "Active Drivers", value: "128", icon: FaUsers },
-  { label: "Pending Approvals", value: "12", icon: FaShieldAlt },
-  { label: "Live Trips", value: "46", icon: FaChartLine },
-  { label: "Popular Drivers", value: "34", icon: FaStar },
-];
-
-const driverCredentials = [
-  { name: "Ahmad Hassan", rating: 4.8, trips: 245, verified: true, status: "pending" },
-  { name: "Sara Ahmed", rating: 4.9, trips: 312, verified: true, status: "pending" },
-  { name: "Omar Mohamed", rating: 4.6, trips: 189, verified: false, status: "pending" },
-];
-
-const dropoutReasons = [
-  { reason: "Long wait times", percentage: 35, count: 1240 },
-  { reason: "High prices", percentage: 28, count: 995 },
-  { reason: "Poor driver behavior", percentage: 18, count: 640 },
-  { reason: "Technical issues", percentage: 12, count: 426 },
-  { reason: "Safety concerns", percentage: 7, count: 249 },
-];
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import {
+  FaChartLine,
+  FaClipboardList,
+  FaExclamationTriangle,
+  FaMapMarkerAlt,
+  FaShieldAlt,
+  FaStar,
+  FaUserCheck,
+  FaUsers,
+} from "react-icons/fa";
+import { useAuth } from "@/lib/authContext";
+import { api } from "../../../convex/_generated/api";
 
 export default function AdminPage() {
   const router = useRouter();
+  const { user, isLoading: authLoading, logout } = useAuth();
   const [expandedSections, setExpandedSections] = useState({
     drivers: false,
     maps: false,
     dropout: false,
   });
 
-  const toggleSection = (section) => {
-    setExpandedSections(prev => ({
+  const metrics = useQuery(api.adminQueries.getMetrics);
+  const pendingDrivers = useQuery(api.adminQueries.getPendingDrivers);
+  const allRides = useQuery(api.adminQueries.getAllRides);
+
+  useEffect(() => {
+    if (!(authLoading || user)) {
+      router.push("/login");
+    } else if (!authLoading && user && user.role !== "admin") {
+      const targetRoute = user.role === "operator" ? "/operator" : "/Commuters";
+      router.push(targetRoute);
+    }
+  }, [user, authLoading, router]);
+
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections((prev) => ({
       ...prev,
-      [section]: !prev[section]
+      [section]: !prev[section],
     }));
   };
 
-  const handleApproveDriver = (driverName) => {
+  const handleApproveDriver = (driverName: string) => {
     alert(`Driver ${driverName} has been approved!`);
   };
 
-  const handleRejectDriver = (driverName) => {
+  const handleRejectDriver = (driverName: string) => {
     alert(`Driver ${driverName} has been rejected.`);
   };
+
+  const adminMetrics = metrics
+    ? [
+        {
+          label: "Active Drivers",
+          value: metrics.activeDrivers.toString(),
+          icon: FaUsers,
+        },
+        {
+          label: "Pending Approvals",
+          value: metrics.pendingApprovals.toString(),
+          icon: FaShieldAlt,
+        },
+        {
+          label: "Live Trips",
+          value: metrics.liveTrips.toString(),
+          icon: FaChartLine,
+        },
+        {
+          label: "Popular Drivers",
+          value: metrics.popularDrivers.toString(),
+          icon: FaStar,
+        },
+      ]
+    : [
+        { label: "Active Drivers", value: "...", icon: FaUsers },
+        { label: "Pending Approvals", value: "...", icon: FaShieldAlt },
+        { label: "Live Trips", value: "...", icon: FaChartLine },
+        { label: "Popular Drivers", value: "...", icon: FaStar },
+      ];
+
+  const dropoutReasons = [
+    { reason: "Long wait times", percentage: 35, count: 1240 },
+    { reason: "High prices", percentage: 28, count: 995 },
+    { reason: "Poor driver behavior", percentage: 18, count: 640 },
+    { reason: "Technical issues", percentage: 12, count: 426 },
+    { reason: "Safety concerns", percentage: 7, count: 249 },
+  ];
+
+  if (authLoading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+        <p className="text-slate-400">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-6xl px-4 py-6">
         <header className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-xl sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-sky-400">Admin Panel</p>
-            <h1 className="mt-2 text-3xl font-semibold">Hatud Operations</h1>
-            <p className="mt-2 max-w-2xl text-slate-400">Monitor fleet activity, manage operator approvals, and review trips from a single, clean admin workspace.</p>
+            <p className="text-sky-400 text-sm uppercase tracking-[0.2em]">
+              Admin Panel
+            </p>
+            <h1 className="mt-2 font-semibold text-3xl">Hatud Operations</h1>
+            <p className="mt-2 max-w-2xl text-slate-400">
+              Monitor fleet activity, manage operator approvals, and review
+              trips from a single, clean admin workspace.
+            </p>
           </div>
-          <Link href="/operator" className="btn btn-secondary max-w-max rounded-full">
-            Operator Dashboard
-          </Link>
+          <div className="flex gap-3">
+            <Link
+              className="btn btn-secondary max-w-max rounded-full"
+              href="/operator"
+            >
+              Operator Dashboard
+            </Link>
+            <button
+              className="btn btn-secondary max-w-max rounded-full text-rose-400 hover:text-rose-300"
+              onClick={logout}
+            >
+              Logout
+            </button>
+          </div>
         </header>
 
-        {/* Metrics Section */}
         <section className="mt-6 grid gap-4 sm:grid-cols-4">
           {adminMetrics.map((metric) => {
             const Icon = metric.icon;
             return (
-              <div key={metric.label} className="cursor-pointer rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm transition hover:border-sky-500 hover:bg-slate-800">
+              <div
+                className="cursor-pointer rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm transition hover:border-sky-500 hover:bg-slate-800"
+                key={metric.label}
+              >
                 <div className="flex items-center justify-between">
-                  <p className="text-sm uppercase tracking-[0.16em] text-slate-500">{metric.label}</p>
+                  <p className="text-slate-500 text-sm uppercase tracking-[0.16em]">
+                    {metric.label}
+                  </p>
                   <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-800 text-sky-400">
                     <Icon />
                   </span>
                 </div>
-                <p className="mt-6 text-4xl font-semibold text-slate-100">{metric.value}</p>
-                <p className="mt-2 text-sm text-slate-400">Updated just now</p>
+                <p className="mt-6 font-semibold text-4xl text-slate-100">
+                  {metric.value}
+                </p>
+                <p className="mt-2 text-slate-400 text-sm">Updated just now</p>
               </div>
             );
           })}
         </section>
 
-        {/* Driver Credentials & Approval Section */}
         <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
-          <button 
-            onClick={() => toggleSection('drivers')}
+          <button
             className="flex w-full cursor-pointer items-center justify-between"
+            onClick={() => toggleSection("drivers")}
           >
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-800 text-sky-400">
                 <FaUserCheck />
               </span>
               <div className="text-left">
-                <p className="font-semibold text-slate-100">Driver Credentials & Approvals</p>
-                <p className="text-sm text-slate-500">Review and approve pending driver applications</p>
+                <p className="font-semibold text-slate-100">
+                  Driver Credentials & Approvals
+                </p>
+                <p className="text-slate-500 text-sm">
+                  Review and approve pending driver applications
+                </p>
               </div>
             </div>
-            <span className={`text-sky-400 transition ${expandedSections.drivers ? 'rotate-180' : ''}`}>
+            <span
+              className={`text-sky-400 transition ${expandedSections.drivers ? "rotate-180" : ""}`}
+            >
               ▼
             </span>
           </button>
 
           {expandedSections.drivers && (
             <div className="mt-6 space-y-4">
-              {driverCredentials.map((driver) => (
-                <div key={driver.name} className="rounded-2xl border border-slate-700 bg-slate-800 p-4">
-                  <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-100">{driver.name}</p>
-                      <div className="mt-2 flex items-center gap-4 text-sm text-slate-400">
-                        <span>⭐ Rating: {driver.rating}</span>
-                        <span>🚗 Trips: {driver.trips}</span>
-                        <span>{driver.verified ? '✓ Verified' : '⚠ Not Verified'}</span>
+              {pendingDrivers && pendingDrivers.length > 0 ? (
+                pendingDrivers.map((driver) => (
+                  <div
+                    className="rounded-2xl border border-slate-700 bg-slate-800 p-4"
+                    key={driver._id}
+                  >
+                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                      <div className="flex-1">
+                        <p className="font-semibold text-slate-100">
+                          {driver.name}
+                        </p>
+                        <p className="text-slate-400 text-sm">{driver.email}</p>
+                        <div className="mt-2 flex items-center gap-4 text-slate-400 text-sm">
+                          <span>License: {driver.licenseNumber}</span>
+                          <span>
+                            Vehicle: {driver.vehicleInfo?.model} (
+                            {driver.vehicleInfo?.color})
+                          </span>
+                          <span>Plate: {driver.vehicleInfo?.plateNumber}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          className="rounded-full bg-green-600 px-4 py-2 font-semibold text-sm text-white transition hover:bg-green-700"
+                          onClick={() => handleApproveDriver(driver.name)}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          className="rounded-full bg-red-600 px-4 py-2 font-semibold text-sm text-white transition hover:bg-red-700"
+                          onClick={() => handleRejectDriver(driver.name)}
+                        >
+                          Reject
+                        </button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleApproveDriver(driver.name)}
-                        className="rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 transition"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleRejectDriver(driver.name)}
-                        className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition"
-                      >
-                        Reject
-                      </button>
-                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="py-4 text-center text-slate-500">
+                  No drivers pending approval
+                </p>
+              )}
             </div>
           )}
         </section>
 
-        {/* Map Management Section */}
         <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
-          <button 
-            onClick={() => toggleSection('maps')}
+          <button
             className="flex w-full cursor-pointer items-center justify-between"
+            onClick={() => toggleSection("maps")}
           >
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-800 text-sky-400">
@@ -148,10 +240,14 @@ export default function AdminPage() {
               </span>
               <div className="text-left">
                 <p className="font-semibold text-slate-100">Map Management</p>
-                <p className="text-sm text-slate-500">Edit routes, zones, and service areas</p>
+                <p className="text-slate-500 text-sm">
+                  Edit routes, zones, and service areas
+                </p>
               </div>
             </div>
-            <span className={`text-sky-400 transition ${expandedSections.maps ? 'rotate-180' : ''}`}>
+            <span
+              className={`text-sky-400 transition ${expandedSections.maps ? "rotate-180" : ""}`}
+            >
               ▼
             </span>
           </button>
@@ -159,23 +255,23 @@ export default function AdminPage() {
           {expandedSections.maps && (
             <div className="mt-6 space-y-4">
               <button
-                type="button"
+                className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white transition hover:bg-sky-700"
                 onClick={() => router.push("/operator/map")}
-                className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700 transition"
+                type="button"
               >
                 Edit Service Zones
               </button>
               <button
-                type="button"
+                className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white transition hover:bg-sky-700"
                 onClick={() => router.push("/operator/map")}
-                className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700 transition"
+                type="button"
               >
                 Manage Route Restrictions
               </button>
               <button
-                type="button"
+                className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white transition hover:bg-sky-700"
                 onClick={() => router.push("/operator/map")}
-                className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700 transition"
+                type="button"
               >
                 View Live Trip Map
               </button>
@@ -183,22 +279,27 @@ export default function AdminPage() {
           )}
         </section>
 
-        {/* Customer Dropout Analysis Section */}
         <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
-          <button 
-            onClick={() => toggleSection('dropout')}
+          <button
             className="flex w-full cursor-pointer items-center justify-between"
+            onClick={() => toggleSection("dropout")}
           >
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-800 text-red-400">
                 <FaExclamationTriangle />
               </span>
               <div className="text-left">
-                <p className="font-semibold text-slate-100">Customer Dropout Analysis</p>
-                <p className="text-sm text-slate-500">Reasons why clients stop using the app</p>
+                <p className="font-semibold text-slate-100">
+                  Customer Dropout Analysis
+                </p>
+                <p className="text-slate-500 text-sm">
+                  Reasons why clients stop using the app
+                </p>
               </div>
             </div>
-            <span className={`text-sky-400 transition ${expandedSections.dropout ? 'rotate-180' : ''}`}>
+            <span
+              className={`text-sky-400 transition ${expandedSections.dropout ? "rotate-180" : ""}`}
+            >
               ▼
             </span>
           </button>
@@ -206,21 +307,30 @@ export default function AdminPage() {
           {expandedSections.dropout && (
             <div className="mt-6 space-y-4">
               {dropoutReasons.map((item) => (
-                <div key={item.reason} className="rounded-2xl border border-slate-700 bg-slate-800 p-4">
+                <div
+                  className="rounded-2xl border border-slate-700 bg-slate-800 p-4"
+                  key={item.reason}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <p className="font-semibold text-slate-100">{item.reason}</p>
-                      <p className="mt-1 text-sm text-slate-400">Total: {item.count} users</p>
+                      <p className="font-semibold text-slate-100">
+                        {item.reason}
+                      </p>
+                      <p className="mt-1 text-slate-400 text-sm">
+                        Total: {item.count} users
+                      </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold text-red-500">{item.percentage}%</p>
+                      <p className="font-bold text-2xl text-red-500">
+                        {item.percentage}%
+                      </p>
                     </div>
                   </div>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-700">
                     <div
                       className="h-full bg-red-500"
                       style={{ width: `${item.percentage}%` }}
-                    ></div>
+                    />
                   </div>
                 </div>
               ))}
@@ -228,7 +338,6 @@ export default function AdminPage() {
           )}
         </section>
 
-        {/* Quick Actions Section */}
         <section className="mt-6 grid gap-4 sm:grid-cols-3">
           <div className="cursor-pointer rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm transition hover:border-sky-500 hover:bg-slate-800">
             <div className="flex items-center gap-3">
@@ -237,13 +346,15 @@ export default function AdminPage() {
               </span>
               <div>
                 <p className="font-semibold text-slate-100">Review Requests</p>
-                <p className="text-sm text-slate-500">Approve new driver activity</p>
+                <p className="text-slate-500 text-sm">
+                  Approve new driver activity
+                </p>
               </div>
             </div>
             <button
-              type="button"
-              onClick={() => router.push("/operator")}
               className="btn btn-primary mt-6 w-full rounded-3xl text-sm"
+              onClick={() => router.push("/operator")}
+              type="button"
             >
               Open
             </button>
@@ -256,13 +367,13 @@ export default function AdminPage() {
               </span>
               <div>
                 <p className="font-semibold text-slate-100">Manage Accounts</p>
-                <p className="text-sm text-slate-500">Update operator status</p>
+                <p className="text-slate-500 text-sm">Update operator status</p>
               </div>
             </div>
             <button
-              type="button"
-              onClick={() => router.push("/operator/profile")}
               className="btn btn-primary mt-6 w-full rounded-3xl text-sm"
+              onClick={() => router.push("/operator/profile")}
+              type="button"
             >
               Open
             </button>
@@ -275,13 +386,13 @@ export default function AdminPage() {
               </span>
               <div>
                 <p className="font-semibold text-slate-100">View Reports</p>
-                <p className="text-sm text-slate-500">See earnings summaries</p>
+                <p className="text-slate-500 text-sm">See earnings summaries</p>
               </div>
             </div>
             <button
-              type="button"
-              onClick={() => router.push("/admin")}
               className="btn btn-primary mt-6 w-full rounded-3xl text-sm"
+              onClick={() => router.push("/admin")}
+              type="button"
             >
               Open
             </button>

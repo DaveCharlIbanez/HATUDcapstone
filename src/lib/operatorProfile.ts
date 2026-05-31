@@ -1,14 +1,14 @@
 export interface OperatorProfile {
-  name: string;
-  email: string;
-  phone: string;
-  vehicle: string;
-  plate: string;
-  region: string;
-  rating: number;
   earnings: number;
-  ridesToday: number;
+  email: string;
   id: string;
+  name: string;
+  phone: string;
+  plate: string;
+  rating: number;
+  region: string;
+  ridesToday: number;
+  vehicle: string;
 }
 
 export const operatorProfile: OperatorProfile = {

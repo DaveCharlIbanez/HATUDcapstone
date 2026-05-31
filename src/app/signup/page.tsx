@@ -1,124 +1,327 @@
-'use client'
+"use client";
 
-import { useState, type FormEvent } from "react"
-import { useRouter } from "next/navigation"
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { type FormEvent, useState } from "react";
+import { useAuth } from "@/lib/authContext";
 
 export default function SignupPage() {
-  const [phone, setPhone] = useState("")
-  const [otp, setOtp] = useState("")
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [step, setStep] = useState<"details" | "otp">("details")
-  const router = useRouter()
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
+    role: "commuter" as "commuter" | "operator" | "admin",
+    licenseNumber: "",
+    plateNumber: "",
+    model: "",
+    color: "",
+  });
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+  const { signup } = useAuth();
 
-  const handleSendOtp = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    // Mock OTP send - in real app, integrate with SMS service
-    alert(`OTP sent to ${phone}: 123456`)
-    setStep("otp")
-  }
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-  const handleVerifyOtp = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (otp === "123456") { // Mock verification
-      // Mock user creation
-      alert("Account created successfully!")
-      router.push("/login")
-    } else {
-      alert("Invalid OTP")
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError("");
+
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      return;
     }
-  }
+
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    if (
+      formData.role === "operator" &&
+      !(
+        formData.licenseNumber &&
+        formData.plateNumber &&
+        formData.model &&
+        formData.color
+      )
+    ) {
+      setError("Please fill in all vehicle details");
+      return;
+    }
+
+    setIsLoading(true);
+
+    const result = await signup({
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      password: formData.password,
+      role: formData.role,
+      licenseNumber:
+        formData.role === "operator" ? formData.licenseNumber : undefined,
+      vehicleInfo:
+        formData.role === "operator"
+          ? {
+              plateNumber: formData.plateNumber,
+              model: formData.model,
+              color: formData.color,
+            }
+          : undefined,
+    });
+
+    setIsLoading(false);
+
+    if (result.success) {
+      router.push("/login?registered=true");
+    } else {
+      setError(result.error || "Signup failed");
+    }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-300 to-blue-100 p-4">
-      <form
-        onSubmit={step === "details" ? handleSendOtp : handleVerifyOtp}
-        className="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm"
-      >
-        <h2 className="text-2xl text-gray-700 font-bold mb-6 text-center">HATUD</h2>
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto">
+        <div className="rounded-[2rem] border border-slate-800 bg-slate-900/90 p-8 shadow-slate-950/50 shadow-xl backdrop-blur">
+          <div className="mb-8 text-center">
+            <h1 className="font-bold text-3xl text-slate-50">HATUD</h1>
+            <p className="mt-2 text-slate-400 text-sm">Create your account</p>
+          </div>
 
-        {step === "details" ? (
-          <>
-            <div className="mb-4">
-              <label htmlFor="name" className="block text-gray-600 mb-2">Full Name</label>
+          {error && (
+            <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div>
+              <label
+                className="mb-2 block font-medium text-slate-300 text-sm"
+                htmlFor="role"
+              >
+                I am a
+              </label>
+              <select
+                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                id="role"
+                name="role"
+                onChange={handleChange}
+                value={formData.role}
+              >
+                <option value="commuter">Commuter</option>
+                <option value="operator">Operator (Driver)</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                className="mb-2 block font-medium text-slate-300 text-sm"
+                htmlFor="name"
+              >
+                Full Name
+              </label>
               <input
+                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                 id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                name="name"
+                onChange={handleChange}
                 placeholder="Enter your full name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
-              />
-            </div>
-            <div className="mb-4">
-              <label htmlFor="email" className="block text-gray-600 mb-2">Email</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div className="mb-4">
-              <label htmlFor="phone" className="block text-gray-600 mb-2">Phone Number</label>
-              <input
-                id="phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+63 9XX XXX XXXX"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              Send OTP
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="mb-4">
-              <label htmlFor="otp" className="block text-gray-600 mb-2">Enter OTP</label>
-              <input
-                id="otp"
                 type="text"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                placeholder="Enter 6-digit code"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
+                value={formData.name}
               />
             </div>
-            <button
-              type="submit"
-              className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              Verify & Sign Up
-            </button>
-            <button
-              type="button"
-              onClick={() => setStep("details")}
-              className="w-full mt-2 text-blue-500 hover:underline"
-            >
-              Change Details
-            </button>
-          </>
-        )}
 
-        <p className="text-center text-sm text-gray-600 mt-4">
-          Already have an account?{" "}
-          <Link href="/login" className="text-blue-500 hover:underline">
-            Log in
-          </Link>
-        </p>
-      </form>
+            <div>
+              <label
+                className="mb-2 block font-medium text-slate-300 text-sm"
+                htmlFor="email"
+              >
+                Email
+              </label>
+              <input
+                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                id="email"
+                name="email"
+                onChange={handleChange}
+                placeholder="Enter your email"
+                required
+                type="email"
+                value={formData.email}
+              />
+            </div>
+
+            <div>
+              <label
+                className="mb-2 block font-medium text-slate-300 text-sm"
+                htmlFor="phone"
+              >
+                Phone Number
+              </label>
+              <input
+                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                id="phone"
+                name="phone"
+                onChange={handleChange}
+                placeholder="+63 9XX XXX XXXX"
+                required
+                type="tel"
+                value={formData.phone}
+              />
+            </div>
+
+            <div>
+              <label
+                className="mb-2 block font-medium text-slate-300 text-sm"
+                htmlFor="password"
+              >
+                Password
+              </label>
+              <input
+                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                id="password"
+                name="password"
+                onChange={handleChange}
+                placeholder="Create a password"
+                required
+                type="password"
+                value={formData.password}
+              />
+            </div>
+
+            <div>
+              <label
+                className="mb-2 block font-medium text-slate-300 text-sm"
+                htmlFor="confirmPassword"
+              >
+                Confirm Password
+              </label>
+              <input
+                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                id="confirmPassword"
+                name="confirmPassword"
+                onChange={handleChange}
+                placeholder="Confirm your password"
+                required
+                type="password"
+                value={formData.confirmPassword}
+              />
+            </div>
+
+            {formData.role === "operator" && (
+              <div className="mt-4 border-slate-700 border-t pt-4">
+                <h3 className="mb-4 font-semibold text-slate-300">
+                  Vehicle Information
+                </h3>
+
+                <div className="space-y-4">
+                  <div>
+                    <label
+                      className="mb-2 block font-medium text-slate-300 text-sm"
+                      htmlFor="licenseNumber"
+                    >
+                      License Number
+                    </label>
+                    <input
+                      className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                      id="licenseNumber"
+                      name="licenseNumber"
+                      onChange={handleChange}
+                      placeholder="DR-XXXX-XXXX"
+                      required={formData.role === "operator"}
+                      type="text"
+                      value={formData.licenseNumber}
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      className="mb-2 block font-medium text-slate-300 text-sm"
+                      htmlFor="plateNumber"
+                    >
+                      Plate Number
+                    </label>
+                    <input
+                      className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                      id="plateNumber"
+                      name="plateNumber"
+                      onChange={handleChange}
+                      placeholder="ABC 123"
+                      required={formData.role === "operator"}
+                      type="text"
+                      value={formData.plateNumber}
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      className="mb-2 block font-medium text-slate-300 text-sm"
+                      htmlFor="model"
+                    >
+                      Vehicle Model
+                    </label>
+                    <input
+                      className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                      id="model"
+                      name="model"
+                      onChange={handleChange}
+                      placeholder="Toyota Hilux"
+                      required={formData.role === "operator"}
+                      type="text"
+                      value={formData.model}
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      className="mb-2 block font-medium text-slate-300 text-sm"
+                      htmlFor="color"
+                    >
+                      Vehicle Color
+                    </label>
+                    <input
+                      className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                      id="color"
+                      name="color"
+                      onChange={handleChange}
+                      placeholder="White"
+                      required={formData.role === "operator"}
+                      type="text"
+                      value={formData.color}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button
+              className="mt-6 w-full rounded-xl bg-sky-500 py-3 font-semibold text-white shadow-lg shadow-sky-500/20 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isLoading}
+              type="submit"
+            >
+              {isLoading ? "Creating Account..." : "Create Account"}
+            </button>
+
+            <p className="mt-4 text-center text-slate-400 text-sm">
+              Already have an account?{" "}
+              <Link
+                className="font-medium text-sky-400 transition-colors hover:text-sky-300"
+                href="/login"
+              >
+                Log in
+              </Link>
+            </p>
+          </form>
+        </div>
+      </div>
     </div>
-  )
-}         
+  );
+}
