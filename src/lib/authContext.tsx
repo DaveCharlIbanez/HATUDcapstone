@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import {
   createContext,
@@ -14,22 +14,19 @@ import { api } from "../../convex/_generated/api";
 type UserRole = "commuter" | "operator" | "admin";
 
 type User = {
-  userId: string;
+  userId: string;  // read-only: used only for getByUserId profile lookups
   role: UserRole;
   name: string;
   email: string;
-  phone: string;
 };
 
 type AuthContextType = {
   user: User | null;
   isLoading: boolean;
-  login: (
-    email: string,
-    password: string
-  ) => Promise<{ success: boolean; error?: string }>;
+  sessionToken: string | null;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signup: (data: SignupData) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 type SignupData = {
@@ -37,7 +34,7 @@ type SignupData = {
   email: string;
   phone: string;
   password: string;
-  role: UserRole;
+  role: "commuter" | "operator";
   licenseNumber?: string;
   vehicleInfo?: {
     plateNumber: string;
@@ -48,27 +45,55 @@ type SignupData = {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const STORAGE_KEY = "hatud_session_token";
+const COOKIE_NAME = "hatud_session_token";
+
+function setSessionCookie(token: string) {
+  document.cookie = `${COOKIE_NAME}=${token}; path=/; max-age=${7 * 24 * 3600}; SameSite=Lax`;
+}
+
+function clearSessionCookie() {
+  document.cookie = `${COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [sessionToken, setSessionToken] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : localStorage.getItem(STORAGE_KEY)
+  );
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  const storedUser =
-    typeof window === "undefined" ? null : localStorage.getItem("hatud_user");
+  // Reactively validate the token against the server on every load
+  const sessionData = useQuery(
+    api.auth.getSession,
+    sessionToken ? { sessionToken } : "skip"
+  );
 
   useEffect(() => {
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        localStorage.removeItem("hatud_user");
-      }
+    if (sessionToken === null) {
+      setUser(null);
+      setIsLoading(false);
+      return;
+    }
+    // sessionData is undefined while the query is loading
+    if (sessionData === undefined) return;
+
+    if (sessionData === null) {
+      // Token invalid or expired — clear it
+      localStorage.removeItem(STORAGE_KEY);
+      clearSessionCookie();
+      setSessionToken(null);
+      setUser(null);
+    } else {
+      setUser({ userId: sessionData.userId, role: sessionData.role, name: sessionData.name, email: sessionData.email });
     }
     setIsLoading(false);
-  }, [storedUser]);
+  }, [sessionData, sessionToken]);
 
   const loginMutation = useMutation(api.auth.login);
   const signupMutation = useMutation(api.auth.signup);
+  const logoutMutation = useMutation(api.auth.logout);
 
   const login = async (
     email: string,
@@ -76,27 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       const result = await loginMutation({ email, password });
-
-      let name = "";
-      if (result.role === "commuter" && result.profile) {
-        name = (result.profile as { name?: string }).name || "";
-      } else if (result.role === "operator" && result.profile) {
-        name = (result.profile as { name?: string }).name || "";
-      } else if (result.role === "admin" && result.profile) {
-        name = (result.profile as { name?: string }).name || "";
-      }
-
-      const userData: User = {
-        userId: result.userId,
-        role: result.role,
-        name,
-        email,
-        phone: "",
-      };
-
-      setUser(userData);
-      localStorage.setItem("hatud_user", JSON.stringify(userData));
-
+      localStorage.setItem(STORAGE_KEY, result.sessionToken);
+      setSessionCookie(result.sessionToken);
+      setSessionToken(result.sessionToken);
       return { success: true };
     } catch (error) {
       return {
@@ -110,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     data: SignupData
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      await signupMutation({
+      const result = await signupMutation({
         name: data.name,
         email: data.email,
         phone: data.phone,
@@ -119,7 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         licenseNumber: data.licenseNumber,
         vehicleInfo: data.vehicleInfo,
       });
-
+      localStorage.setItem(STORAGE_KEY, result.sessionToken);
+      setSessionCookie(result.sessionToken);
+      setSessionToken(result.sessionToken);
       return { success: true };
     } catch (error) {
       return {
@@ -129,14 +138,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    if (sessionToken) {
+      try {
+        await logoutMutation({ sessionToken });
+      } catch {
+        // Best-effort server revocation; always clear locally
+      }
+    }
+    localStorage.removeItem(STORAGE_KEY);
+    clearSessionCookie();
+    setSessionToken(null);
     setUser(null);
-    localStorage.removeItem("hatud_user");
     router.replace("/login");
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, sessionToken, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

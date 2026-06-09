@@ -73,7 +73,7 @@ export default function MapPage() {
           </div>
 
           {/* CONTENT */}
-          <div className="h-full overflow-y-auto px-4 pb-4">
+          <div className="h-full touch-pan-y overflow-y-auto overscroll-contain px-4 pb-4">
             {/* PICKUP */}
             <div className="mb-4 flex items-start gap-3">
               <div className="mt-2 h-3 w-3 rounded-full bg-green-500" />
@@ -103,12 +103,20 @@ export default function MapPage() {
 
             {/* EXTRA WHEN OPEN */}
             {open && (
-              <div className="mt-4 space-y-3 text-sm">
-                <p className="text-gray-400">POPULAR LOCATIONS</p>
+              <div className="mt-4 text-sm">
+                <p className="mb-3 text-gray-400">POPULAR LOCATIONS</p>
+                <div className="flex flex-wrap gap-2">
 
-                <button className="w-full rounded-lg p-2 text-left hover:bg-gray-100"></button>
-                <button className="w-full rounded-lg p-2 text-left hover:bg-gray-100"></button>
-                <button className="w-full rounded-lg p-2 text-left hover:bg-gray-100"></button>
+                {["San Jose de Buenavista", "Hamtic", "Sibalom"].map((loc) => (
+                  <button
+                    className="rounded-full border border-gray-200 bg-gray-100 px-3 py-1.5 text-gray-700 text-sm transition hover:bg-gray-200 active:bg-gray-300"
+                    key={loc}
+                    onClick={() => { setDropoff(loc); setOpen(true); }}
+                  >
+                    {loc}
+                  </button>
+                ))}
+                </div>
               </div>
             )}
           </div>

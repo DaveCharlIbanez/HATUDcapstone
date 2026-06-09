@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -19,16 +18,25 @@ import { api } from "../../../convex/_generated/api";
 
 export default function AdminPage() {
   const router = useRouter();
-  const { user, isLoading: authLoading, logout } = useAuth();
+  const { user, isLoading: authLoading, logout, sessionToken } = useAuth();
   const [expandedSections, setExpandedSections] = useState({
     drivers: false,
     maps: false,
     dropout: false,
   });
 
-  const metrics = useQuery(api.adminQueries.getMetrics);
-  const pendingDrivers = useQuery(api.adminQueries.getPendingDrivers);
-  const allRides = useQuery(api.adminQueries.getAllRides);
+  const metrics = useQuery(
+    api.adminQueries.getMetrics,
+    sessionToken ? { sessionToken } : "skip"
+  );
+  const pendingDrivers = useQuery(
+    api.adminQueries.getPendingDrivers,
+    sessionToken ? { sessionToken } : "skip"
+  );
+  const allRides = useQuery(
+    api.adminQueries.getAllRides,
+    sessionToken ? { sessionToken } : "skip"
+  );
 
   useEffect(() => {
     if (!(authLoading || user)) {
@@ -115,12 +123,6 @@ export default function AdminPage() {
             </p>
           </div>
           <div className="flex gap-3">
-            <Link
-              className="btn btn-secondary max-w-max rounded-full"
-              href="/operator"
-            >
-              Operator Dashboard
-            </Link>
             <button
               className="btn btn-secondary max-w-max rounded-full text-rose-400 hover:text-rose-300"
               onClick={logout}
@@ -256,21 +258,21 @@ export default function AdminPage() {
             <div className="mt-6 space-y-4">
               <button
                 className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white transition hover:bg-sky-700"
-                onClick={() => router.push("/operator/map")}
+                onClick={() => alert("Service zone editor coming soon.")}
                 type="button"
               >
                 Edit Service Zones
               </button>
               <button
                 className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white transition hover:bg-sky-700"
-                onClick={() => router.push("/operator/map")}
+                onClick={() => alert("Route restrictions coming soon.")}
                 type="button"
               >
                 Manage Route Restrictions
               </button>
               <button
                 className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white transition hover:bg-sky-700"
-                onClick={() => router.push("/operator/map")}
+                onClick={() => router.push("/map")}
                 type="button"
               >
                 View Live Trip Map
@@ -353,7 +355,7 @@ export default function AdminPage() {
             </div>
             <button
               className="btn btn-primary mt-6 w-full rounded-3xl text-sm"
-              onClick={() => router.push("/operator")}
+              onClick={() => toggleSection("drivers")}
               type="button"
             >
               Open
@@ -372,7 +374,7 @@ export default function AdminPage() {
             </div>
             <button
               className="btn btn-primary mt-6 w-full rounded-3xl text-sm"
-              onClick={() => router.push("/operator/profile")}
+              onClick={() => alert("Account management coming soon.")}
               type="button"
             >
               Open
@@ -391,7 +393,7 @@ export default function AdminPage() {
             </div>
             <button
               className="btn btn-primary mt-6 w-full rounded-3xl text-sm"
-              onClick={() => router.push("/admin")}
+              onClick={() => alert("Reports coming soon.")}
               type="button"
             >
               Open

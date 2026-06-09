@@ -13,6 +13,7 @@ import type * as admins from "../admins.js";
 import type * as auth from "../auth.js";
 import type * as commuters from "../commuters.js";
 import type * as feedback from "../feedback.js";
+import type * as lib_withAuth from "../lib/withAuth.js";
 import type * as operators from "../operators.js";
 import type * as rides from "../rides.js";
 import type * as seed from "../seed.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   commuters: typeof commuters;
   feedback: typeof feedback;
+  "lib/withAuth": typeof lib_withAuth;
   operators: typeof operators;
   rides: typeof rides;
   seed: typeof seed;

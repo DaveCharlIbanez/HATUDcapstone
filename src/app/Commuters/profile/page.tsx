@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FaCog,
   FaCreditCard,
@@ -38,11 +38,22 @@ interface PaymentMethod {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user: authUser, isLoading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && !authUser) { router.push("/login"); return; }
+    if (!authLoading && authUser && authUser.role !== "commuter") {
+      router.push(authUser.role === "admin" ? "/admin" : "/operator");
+    }
+  }, [authUser, authLoading, router]);
+
   const [activeTab, setActiveTab] = useState<
     "profile" | "history" | "payment" | "settings"
   >("profile");
   const [isEditing, setIsEditing] = useState(false);
+  const [notifications, setNotifications] = useState(true);
+  const [locationServices, setLocationServices] = useState(true);
+  const [darkMode, setDarkMode] = useState(true);
 
   // Mock user data
   const [user, setUser] = useState(commuterProfile);
@@ -388,7 +399,10 @@ export default function ProfilePage() {
                   <h2 className="font-bold text-2xl text-white">
                     Payment Methods
                   </h2>
-                  <button className="rounded-xl bg-sky-500 px-4 py-2.5 font-semibold text-sm text-white transition-colors hover:bg-sky-400">
+                  <button
+                    className="rounded-xl bg-sky-500 px-4 py-2.5 font-semibold text-sm text-white transition-colors hover:bg-sky-400"
+                    onClick={() => alert("Payment methods coming soon.")}
+                  >
                     + Add Method
                   </button>
                 </div>
@@ -423,11 +437,17 @@ export default function ProfilePage() {
                       </div>
                       <div className="flex gap-2">
                         {!method.isDefault && (
-                          <button className="rounded-lg px-3 py-1 text-sky-400 text-sm transition-colors hover:bg-sky-500/10">
+                          <button
+                            className="rounded-lg px-3 py-1 text-sky-400 text-sm transition-colors hover:bg-sky-500/10"
+                            onClick={() => alert("Set as default coming soon.")}
+                          >
                             Set Default
                           </button>
                         )}
-                        <button className="rounded-lg px-3 py-1 text-rose-400 text-sm transition-colors hover:bg-rose-500/10">
+                        <button
+                          className="rounded-lg px-3 py-1 text-rose-400 text-sm transition-colors hover:bg-rose-500/10"
+                          onClick={() => alert("Remove payment method coming soon.")}
+                        >
                           Remove
                         </button>
                       </div>
@@ -453,8 +473,9 @@ export default function ProfilePage() {
                     </div>
                     <label className="relative inline-flex cursor-pointer items-center">
                       <input
+                        checked={notifications}
                         className="peer sr-only"
-                        defaultChecked
+                        onChange={() => setNotifications((prev) => !prev)}
                         type="checkbox"
                       />
                       <div className="peer h-6 w-11 rounded-full bg-slate-700 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-sky-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-500/30" />
@@ -472,8 +493,9 @@ export default function ProfilePage() {
                     </div>
                     <label className="relative inline-flex cursor-pointer items-center">
                       <input
+                        checked={locationServices}
                         className="peer sr-only"
-                        defaultChecked
+                        onChange={() => setLocationServices((prev) => !prev)}
                         type="checkbox"
                       />
                       <div className="peer h-6 w-11 rounded-full bg-slate-700 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-sky-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-500/30" />
@@ -486,13 +508,14 @@ export default function ProfilePage() {
                         Dark Mode
                       </h3>
                       <p className="text-slate-400 text-sm">
-                        Currently enabled
+                        {darkMode ? "Currently enabled" : "Currently disabled"}
                       </p>
                     </div>
                     <label className="relative inline-flex cursor-pointer items-center">
                       <input
+                        checked={darkMode}
                         className="peer sr-only"
-                        defaultChecked
+                        onChange={() => setDarkMode((prev) => !prev)}
                         type="checkbox"
                       />
                       <div className="peer h-6 w-11 rounded-full bg-slate-700 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-sky-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-500/30" />
@@ -502,17 +525,29 @@ export default function ProfilePage() {
                   <hr className="border-slate-700" />
 
                   <div className="space-y-2">
-                    <button className="w-full rounded-lg px-4 py-3 text-left font-medium text-rose-400 transition-colors hover:bg-rose-500/10">
+                    <button
+                      className="w-full rounded-lg px-4 py-3 text-left font-medium text-rose-400 transition-colors hover:bg-rose-500/10"
+                      onClick={() => alert("Account deletion: please contact support.")}
+                    >
                       Delete Account
                     </button>
-                    <button className="w-full rounded-lg px-4 py-3 text-left text-slate-300 transition-colors hover:bg-slate-800">
+                    <button
+                      className="w-full rounded-lg px-4 py-3 text-left text-slate-300 transition-colors hover:bg-slate-800"
+                      onClick={() => alert("Privacy policy coming soon.")}
+                    >
                       Privacy Policy
                     </button>
-                    <button className="w-full rounded-lg px-4 py-3 text-left text-slate-300 transition-colors hover:bg-slate-800">
+                    <button
+                      className="w-full rounded-lg px-4 py-3 text-left text-slate-300 transition-colors hover:bg-slate-800"
+                      onClick={() => alert("Terms of service coming soon.")}
+                    >
                       Terms of Service
                     </button>
-                    <button className="w-full rounded-lg px-4 py-3 text-left text-slate-300 transition-colors hover:bg-slate-800">
-                      Help & Support
+                    <button
+                      className="w-full rounded-lg px-4 py-3 text-left text-slate-300 transition-colors hover:bg-slate-800"
+                      onClick={() => alert("Help & Support coming soon.")}
+                    >
+                      Help &amp; Support
                     </button>
                   </div>
                 </div>

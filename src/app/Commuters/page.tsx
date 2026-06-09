@@ -3,8 +3,12 @@
 import maplibregl from "maplibre-gl";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { FaClock, FaMapMarkerAlt, FaSignOutAlt, FaStar, FaUser } from "react-icons/fa";
+import { useRouter } from "next/navigation";
+import { FaClock, FaMapMarkerAlt, FaSignOutAlt, FaUser } from "react-icons/fa";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { useMutation, useQuery } from "convex/react";
+import type { Id } from "convex/values";
+import { api } from "../../../convex/_generated/api";
 import { useAuth } from "@/lib/authContext";
 
 interface Vehicle {
@@ -16,99 +20,54 @@ interface Vehicle {
   type: string;
 }
 
-interface MatchedDriver {
-  id: number;
-  name: string;
-  photo: string;
-  plate: string;
-  rating: number;
-  vehicle: string;
-}
-
 const CommutersPage = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const { logout } = useAuth();
+  const { user, logout, sessionToken, isLoading: authLoading } = useAuth();
+  const router = useRouter();
 
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
+  const [pickupCoords, setPickupCoords] = useState({ lat: 0, lng: 0 });
+  const [dropoffCoords, setDropoffCoords] = useState({ lat: 0, lng: 0 });
   const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [step, setStep] = useState<
-    "location" | "vehicle" | "booking" | "tracking"
-  >("location");
+  const [pickupSuggestions, setPickupSuggestions] = useState<any[]>([]);
+  const [step, setStep] = useState<"location" | "vehicle" | "booking" | "tracking">("location");
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
   const [rideStatus, setRideStatus] = useState<
-    | "searching"
-    | "matched"
-    | "arriving"
-    | "arrived"
-    | "in-progress"
-    | "completed"
+    "searching" | "matched" | "arriving" | "arrived" | "in-progress" | "completed"
   >("searching");
-  const [matchedDriver, setMatchedDriver] = useState<MatchedDriver | null>(
-    null
+  const [activeRideId, setActiveRideId] = useState<Id<"rides"> | null>(null);
+  const [confirmedRide, setConfirmedRide] = useState(false);
+
+  // Resolve commuter profile from userId
+  const commuter = useQuery(
+    api.commuters.getByUserId,
+    user ? { userId: user.userId as Id<"users"> } : "skip"
   );
 
-  const [commuterProfile] = useState({
-    name: "Maria Santos",
-    totalRides: 24,
-    rating: 4.8,
-  });
+  // Real-time subscription to the commuter's current active ride
+  const activeRide = useQuery(
+    api.rides.getActiveByCommuter,
+    commuter ? { commuterId: commuter._id } : "skip"
+  );
+
+  // Fetch operator info once a ride is accepted
+  const matchedOperator = useQuery(
+    api.operators.getById,
+    activeRide?.operatorId ? { id: activeRide.operatorId } : "skip"
+  );
+
+  const createRide = useMutation(api.rides.create);
+  const cancelRide = useMutation(api.rides.cancel);
 
   const vehicles: Vehicle[] = [
-    {
-      type: "economy",
-      name: "Hatud Economy",
-      icon: "🚗",
-      eta: "2 min",
-      capacity: 4,
-      price: 50,
-    },
-    {
-      type: "comfort",
-      name: "Hatud Comfort",
-      icon: "🚙",
-      eta: "3 min",
-      capacity: 4,
-      price: 75,
-    },
-    {
-      type: "xl",
-      name: "Hatud XL",
-      icon: "🚐",
-      eta: "5 min",
-      capacity: 6,
-      price: 120,
-    },
+    { type: "economy", name: "Hatud Economy", icon: "🚗", eta: "2 min", capacity: 4, price: 50 },
+    { type: "comfort", name: "Hatud Comfort", icon: "🚙", eta: "3 min", capacity: 4, price: 75 },
+    { type: "xl", name: "Hatud XL", icon: "🚐", eta: "5 min", capacity: 6, price: 120 },
   ];
 
-  const mockDrivers: MatchedDriver[] = [
-    {
-      id: 1,
-      name: "Juan Cruz",
-      rating: 4.9,
-      photo: "👨‍🔧",
-      vehicle: "Toyota Vios 2023",
-      plate: "ABC-1234",
-    },
-    {
-      id: 2,
-      name: "Pedro Reyes",
-      rating: 4.8,
-      photo: "👨‍💼",
-      vehicle: "Honda City 2022",
-      plate: "XYZ-5678",
-    },
-    {
-      id: 3,
-      name: "Carlos Mendez",
-      rating: 4.7,
-      photo: "👨‍🎓",
-      vehicle: "Mitsubishi Mirage 2023",
-      plate: "DEF-9012",
-    },
-  ];
-
+  // Map init
   useEffect(() => {
     if (mapContainer.current && !map.current) {
       map.current = new maplibregl.Map({
@@ -128,8 +87,80 @@ const CommutersPage = () => {
       new maplibregl.Marker({ element: el })
         .setLngLat([122.0175, 10.7883])
         .addTo(map.current);
+
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { longitude, latitude } = position.coords;
+            setPickupCoords({ lat: latitude, lng: longitude });
+            setPickup(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+            if (map.current) {
+              map.current.flyTo({ center: [longitude, latitude], zoom: 14 });
+              el.style.display = "block";
+            }
+          },
+          (error) => console.error("Geolocation error:", error)
+        );
+      }
     }
   }, []);
+
+  // Role guard — redirect non-commuters
+  useEffect(() => {
+    if (!authLoading && !user) { router.push("/login"); return; }
+    if (!authLoading && user && user.role !== "commuter") {
+      router.push(user.role === "admin" ? "/admin" : "/operator");
+    }
+  }, [user, authLoading, router]);
+
+  // React to Convex ride status changes — drives all UI transitions
+  useEffect(() => {
+    if (!activeRide) return;
+
+    if (activeRide.status === "pending") {
+      setStep("booking");
+      setRideStatus("searching");
+    } else if (activeRide.status === "accepted") {
+      if (confirmedRide) {
+        setStep("tracking");
+        setRideStatus("arriving");
+      } else {
+        setStep("booking");
+        setRideStatus("matched");
+      }
+    } else if (activeRide.status === "inProgress") {
+      setStep("tracking");
+      setRideStatus("in-progress");
+    } else if (activeRide.status === "completed") {
+      setStep("tracking");
+      setRideStatus("completed");
+    } else if (activeRide.status === "cancelled") {
+      resetBooking();
+    }
+  }, [activeRide?.status, confirmedRide]);
+
+  const handlePickupSearch = async (query: string) => {
+    setPickup(query);
+    if (query.length > 2) {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${query}, Antique, Philippines`
+        );
+        const data = await response.json();
+        setPickupSuggestions(data.slice(0, 4));
+      } catch (error) {
+        console.error("Pickup search error:", error);
+      }
+    } else {
+      setPickupSuggestions([]);
+    }
+  };
+
+  const handlePickupSelect = (place: any) => {
+    setPickup(place.display_name);
+    setPickupCoords({ lat: Number.parseFloat(place.lat), lng: Number.parseFloat(place.lon) });
+    setPickupSuggestions([]);
+  };
 
   const handleSearch = async (query: string) => {
     setDropoff(query);
@@ -143,45 +174,87 @@ const CommutersPage = () => {
       } catch (error) {
         console.error("Search error:", error);
       }
+    } else {
+      setSuggestions([]);
     }
   };
 
   const handleSelect = (place: any) => {
     setDropoff(place.display_name);
+    setDropoffCoords({ lat: Number.parseFloat(place.lat), lng: Number.parseFloat(place.lon) });
     setSuggestions([]);
   };
 
-  const handleBookRide = () => {
-    if (selectedVehicle && pickup && dropoff) {
-      setStep("booking");
+  const handleBookRide = async () => {
+    if (!selectedVehicle || !pickup || !dropoff || !commuter || !sessionToken) return;
 
-      setTimeout(() => {
-        const randomDriver =
-          mockDrivers[Math.floor(Math.random() * mockDrivers.length)];
-        setMatchedDriver(randomDriver ?? null);
-        setRideStatus("matched");
-      }, 3000);
+    const vehicle = vehicles.find((v) => v.type === selectedVehicle);
+    if (!vehicle) return;
+
+    setStep("booking");
+    setRideStatus("searching");
+
+    try {
+      const rideId = await createRide({
+        sessionToken,
+        commuterId: commuter._id,
+        pickup: {
+          address: pickup,
+          latitude: pickupCoords.lat,
+          longitude: pickupCoords.lng,
+        },
+        dropoff: {
+          address: dropoff,
+          latitude: dropoffCoords.lat,
+          longitude: dropoffCoords.lng,
+        },
+        vehicleType: selectedVehicle as "economy" | "comfort" | "xl",
+        fare: vehicle.price,
+        distance: 0,
+      });
+      setActiveRideId(rideId);
+    } catch (err) {
+      console.error("Booking failed:", err);
+      setStep("vehicle");
     }
   };
 
   const handleConfirmBooking = () => {
+    setConfirmedRide(true);
     setStep("tracking");
     setRideStatus("arriving");
+  };
 
-    // Simulate ride progression
-    setTimeout(() => setRideStatus("arrived"), 5000);
-    setTimeout(() => setRideStatus("in-progress"), 10_000);
-    setTimeout(() => setRideStatus("completed"), 15_000);
+  const handleCancelRide = async () => {
+    if (activeRideId && sessionToken) {
+      await cancelRide({ sessionToken, id: activeRideId });
+    }
+    resetBooking();
   };
 
   const resetBooking = () => {
     setStep("location");
     setPickup("");
     setDropoff("");
+    setPickupCoords({ lat: 0, lng: 0 });
+    setDropoffCoords({ lat: 0, lng: 0 });
+    setPickupSuggestions([]);
+    setSuggestions([]);
     setSelectedVehicle(null);
     setRideStatus("searching");
-    setMatchedDriver(null);
+    setActiveRideId(null);
+    setConfirmedRide(false);
   };
+
+  const displayName = commuter?.name ?? user?.name ?? "Loading...";
+
+  if (authLoading || !user || user.role !== "commuter") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+        <p className="text-slate-400">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-screen w-full bg-slate-950 text-slate-100">
@@ -192,12 +265,7 @@ const CommutersPage = () => {
             <FaUser />
           </div>
           <div className="min-w-0">
-            <p className="font-semibold text-sm text-white">
-              {commuterProfile.name}
-            </p>
-            <p className="text-slate-400 text-xs">
-              {commuterProfile.totalRides} rides • {commuterProfile.rating} ★
-            </p>
+            <p className="font-semibold text-sm text-white">{displayName}</p>
           </div>
           <Link
             className="inline-flex items-center gap-2 rounded-full bg-sky-500 px-3 py-2 font-medium text-sm text-white shadow transition-colors hover:bg-sky-400"
@@ -228,22 +296,37 @@ const CommutersPage = () => {
           </div>
 
           {/* CONTENT */}
-          <div className="max-h-[70vh] overflow-y-auto px-4 pb-4">
+          <div className="max-h-[calc(100dvh-7rem)] touch-pan-y overflow-y-auto overscroll-contain px-4 pb-4">
             {/* LOCATION STEP */}
             {step === "location" && (
               <>
                 <div className="mb-4 space-y-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-3 w-3 rounded-full bg-emerald-400" />
+                    <div className="h-3 w-3 shrink-0 rounded-full bg-emerald-400" />
                     <input
                       className="flex-1 border-slate-300 border-b bg-transparent pb-2 text-slate-100 outline-none placeholder:text-slate-500"
-                      onChange={(e) => setPickup(e.target.value)}
+                      onChange={(e) => handlePickupSearch(e.target.value)}
                       placeholder="Pickup location"
                       value={pickup}
                     />
                   </div>
+
+                  {/* PICKUP SUGGESTIONS */}
+                  {pickupSuggestions.map((place, i) => (
+                    <button
+                      className="block w-full rounded-2xl border border-slate-800 bg-slate-900/90 p-3 text-left text-slate-100 transition hover:border-slate-700 hover:bg-slate-900"
+                      key={i}
+                      onClick={() => handlePickupSelect(place)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <FaMapMarkerAlt className="shrink-0 text-emerald-400" />
+                        <span className="text-sm">{place.display_name}</span>
+                      </div>
+                    </button>
+                  ))}
+
                   <div className="flex items-center gap-3">
-                    <div className="h-3 w-3 rounded-full bg-rose-400" />
+                    <div className="h-3 w-3 shrink-0 rounded-full bg-rose-400" />
                     <input
                       className="flex-1 border-slate-300 border-b bg-transparent pb-2 text-slate-100 outline-none placeholder:text-slate-500"
                       onChange={(e) => handleSearch(e.target.value)}
@@ -253,7 +336,7 @@ const CommutersPage = () => {
                   </div>
                 </div>
 
-                {/* SUGGESTIONS */}
+                {/* DROPOFF SUGGESTIONS */}
                 {suggestions.map((place, i) => (
                   <button
                     className="mb-2 block w-full rounded-3xl border border-slate-800 bg-slate-900/90 p-3 text-left text-slate-100 transition hover:border-slate-700 hover:bg-slate-900"
@@ -297,23 +380,16 @@ const CommutersPage = () => {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="text-3xl text-sky-400">
-                            {vehicle.icon}
-                          </div>
+                          <div className="text-3xl text-sky-400">{vehicle.icon}</div>
                           <div className="text-left">
-                            <div className="font-semibold text-white">
-                              {vehicle.name}
-                            </div>
+                            <div className="font-semibold text-white">{vehicle.name}</div>
                             <div className="flex items-center gap-2 text-slate-400 text-sm">
-                              <FaClock className="text-xs" /> {vehicle.eta} •{" "}
-                              {vehicle.capacity} seats
+                              <FaClock className="text-xs" /> {vehicle.eta} • {vehicle.capacity} seats
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-bold text-lg text-white">
-                            ₱{vehicle.price}
-                          </div>
+                          <div className="font-bold text-lg text-white">₱{vehicle.price}</div>
                         </div>
                       </div>
                     </button>
@@ -323,13 +399,11 @@ const CommutersPage = () => {
                 {/* BOOK BUTTON */}
                 <button
                   className="mt-2 w-full rounded-3xl bg-sky-500 py-3 font-semibold text-sm text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700"
-                  disabled={!selectedVehicle}
+                  disabled={!selectedVehicle || !commuter || !sessionToken}
                   onClick={handleBookRide}
                 >
                   Book{" "}
-                  {selectedVehicle
-                    ? vehicles.find((v) => v.type === selectedVehicle)?.name
-                    : ""}
+                  {selectedVehicle ? vehicles.find((v) => v.type === selectedVehicle)?.name : ""}
                 </button>
               </>
             )}
@@ -340,16 +414,20 @@ const CommutersPage = () => {
                 {rideStatus === "searching" && (
                   <div className="py-8 text-center">
                     <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-sky-400 border-t-transparent" />
-                    <h3 className="mb-2 font-semibold text-lg text-white">
-                      Finding your driver
-                    </h3>
-                    <p className="text-slate-400">
+                    <h3 className="mb-2 font-semibold text-lg text-white">Finding your driver</h3>
+                    <p className="mb-6 text-slate-400">
                       Please wait while we match you with the best driver
                     </p>
+                    <button
+                      className="w-full rounded-3xl bg-slate-800 py-3 font-semibold text-slate-100 text-sm transition hover:bg-slate-700"
+                      onClick={handleCancelRide}
+                    >
+                      Cancel
+                    </button>
                   </div>
                 )}
 
-                {rideStatus === "matched" && matchedDriver && (
+                {rideStatus === "matched" && matchedOperator && (
                   <div className="space-y-4">
                     <h3 className="mb-6 text-center font-semibold text-white text-xl">
                       Driver Assigned!
@@ -358,17 +436,11 @@ const CommutersPage = () => {
                     <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
                       <div className="mb-4 flex items-center gap-4">
                         <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-slate-800 text-3xl">
-                          {matchedDriver.photo}
+                          🚗
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="font-semibold text-base text-white">
-                            {matchedDriver.name}
-                          </div>
-                          <div className="mt-1 flex items-center gap-1 text-slate-400">
-                            <FaStar className="text-xs text-yellow-400" />
-                            <span className="font-medium text-sm">
-                              {matchedDriver.rating}
-                            </span>
+                            {matchedOperator.name}
                           </div>
                         </div>
                       </div>
@@ -376,13 +448,19 @@ const CommutersPage = () => {
                         <div className="flex justify-between">
                           <span>Vehicle:</span>
                           <span className="font-medium text-white">
-                            {matchedDriver.vehicle}
+                            {matchedOperator.vehicleInfo.model}
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span>Plate:</span>
                           <span className="font-medium text-white">
-                            {matchedDriver.plate}
+                            {matchedOperator.vehicleInfo.plateNumber}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Color:</span>
+                          <span className="font-medium text-white">
+                            {matchedOperator.vehicleInfo.color}
                           </span>
                         </div>
                       </div>
@@ -396,6 +474,15 @@ const CommutersPage = () => {
                     </button>
                   </div>
                 )}
+
+                {/* Waiting for operator to accept — matched is loading */}
+                {rideStatus === "matched" && !matchedOperator && (
+                  <div className="py-8 text-center">
+                    <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-sky-400 border-t-transparent" />
+                    <h3 className="mb-2 font-semibold text-lg text-white">Driver found!</h3>
+                    <p className="text-slate-400">Loading driver details...</p>
+                  </div>
+                )}
               </>
             )}
 
@@ -403,22 +490,21 @@ const CommutersPage = () => {
             {step === "tracking" && (
               <div className="py-8 text-center">
                 <h3 className="mb-4 font-semibold text-lg text-white">
-                  {rideStatus === "arriving" && "Driver is arriving"}
+                  {rideStatus === "arriving" && "Driver is on the way"}
                   {rideStatus === "arrived" && "Driver has arrived"}
                   {rideStatus === "in-progress" && "Ride in progress"}
                   {rideStatus === "completed" && "Ride completed"}
                 </h3>
 
-                {matchedDriver && (
+                {matchedOperator && (
                   <div className="mb-4 rounded-lg border border-slate-800 bg-slate-900 p-4">
                     <div className="flex items-center gap-4">
-                      <div className="text-3xl">{matchedDriver.photo}</div>
+                      <div className="text-3xl">🚗</div>
                       <div className="text-left">
-                        <div className="font-medium text-white">
-                          {matchedDriver.name}
-                        </div>
+                        <div className="font-medium text-white">{matchedOperator.name}</div>
                         <div className="text-slate-400 text-sm">
-                          {matchedDriver.vehicle}
+                          {matchedOperator.vehicleInfo.model} •{" "}
+                          {matchedOperator.vehicleInfo.plateNumber}
                         </div>
                       </div>
                     </div>
@@ -427,8 +513,11 @@ const CommutersPage = () => {
 
                 {rideStatus === "completed" && (
                   <div className="space-y-3">
-                    <button className="w-full rounded-3xl bg-sky-500 py-3 font-semibold text-sm text-white transition hover:bg-sky-400">
-                      Rate Driver
+                    <button
+                      className="w-full rounded-3xl bg-sky-500 py-3 font-semibold text-sm text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400"
+                      onClick={() => router.push("/payment")}
+                    >
+                      Pay &amp; Rate Driver
                     </button>
                     <button
                       className="w-full rounded-3xl bg-slate-800 py-3 font-semibold text-slate-100 text-sm transition hover:bg-slate-700"

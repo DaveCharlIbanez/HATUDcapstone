@@ -1,9 +1,11 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
+import { requireRole } from "./lib/withAuth";
 
 export const getActiveDriversCount = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
     const availableOperators = await ctx.db
       .query("operators")
       .withIndex("by_isAvailable", (q) => q.eq("isAvailable", true))
@@ -13,8 +15,9 @@ export const getActiveDriversCount = query({
 });
 
 export const getLiveTripsCount = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
     const liveTrips = await ctx.db
       .query("rides")
       .withIndex("by_status", (q) => q.eq("status", "inProgress"))
@@ -24,8 +27,9 @@ export const getLiveTripsCount = query({
 });
 
 export const getPendingApprovalsCount = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
     const pendingRides = await ctx.db
       .query("rides")
       .withIndex("by_status", (q) => q.eq("status", "pending"))
@@ -35,8 +39,9 @@ export const getPendingApprovalsCount = query({
 });
 
 export const getTotalCompletedTrips = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
     const completedTrips = await ctx.db
       .query("rides")
       .withIndex("by_status", (q) => q.eq("status", "completed"))
@@ -46,8 +51,10 @@ export const getTotalCompletedTrips = query({
 });
 
 export const getMetrics = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
+
     const availableOperators = await ctx.db
       .query("operators")
       .withIndex("by_isAvailable", (q) => q.eq("isAvailable", true))
@@ -80,11 +87,7 @@ export const getMetrics = query({
           feedbacks.length > 0
             ? feedbacks.reduce((sum, f) => sum + f.rating, 0) / feedbacks.length
             : 0;
-        return {
-          ...op,
-          averageRating: avgRating,
-          totalRatings: feedbacks.length,
-        };
+        return { ...op, averageRating: avgRating, totalRatings: feedbacks.length };
       })
     );
 
@@ -103,8 +106,9 @@ export const getMetrics = query({
 });
 
 export const getPendingDrivers = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
     const operators = await ctx.db.query("operators").collect();
     return operators.map((op) => ({
       _id: op._id,
@@ -120,24 +124,26 @@ export const getPendingDrivers = query({
 });
 
 export const listOperators = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
     const operators = await ctx.db.query("operators").collect();
     return operators;
   },
 });
 
 export const getAllRides = query({
-  args: {},
-  handler: async (ctx) => {
-    const rides = await ctx.db.query("rides").collect();
-    return rides;
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
+    return await ctx.db.query("rides").collect();
   },
 });
 
 export const getRecentFeedback = query({
-  args: { limit: v.number() },
+  args: { sessionToken: v.string(), limit: v.number() },
   handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
     const feedbacks = await ctx.db.query("feedback").collect();
     return feedbacks.slice(-args.limit).reverse();
   },

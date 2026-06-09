@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireRole } from "./lib/withAuth";
 
 export const getByUserId = query({
   args: { userId: v.id("users") },
@@ -29,14 +30,18 @@ export const listAll = query({
   handler: async (ctx) => await ctx.db.query("admins").collect(),
 });
 
+// Requires an existing admin session — prevents privilege escalation
 export const create = mutation({
   args: {
+    sessionToken: v.string(),
     userId: v.id("users"),
     name: v.string(),
     email: v.string(),
     permissions: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
+
     const existing = await ctx.db
       .query("admins")
       .withIndex("by_userId", (q) => q.eq("userId", args.userId))
@@ -51,11 +56,7 @@ export const create = mutation({
       userId: args.userId,
       name: args.name,
       email: args.email,
-      permissions: args.permissions ?? [
-        "view_all",
-        "manage_users",
-        "view_analytics",
-      ],
+      permissions: args.permissions ?? ["view_all", "manage_users", "view_analytics"],
       createdAt: now,
       updatedAt: now,
     });
@@ -64,23 +65,20 @@ export const create = mutation({
 
 export const update = mutation({
   args: {
+    sessionToken: v.string(),
     id: v.id("admins"),
     name: v.optional(v.string()),
     permissions: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
+
     const admin = await ctx.db.get(args.id);
-    if (!admin) {
-      throw new Error("Admin not found");
-    }
+    if (!admin) throw new Error("Admin not found");
 
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
-    if (args.name !== undefined) {
-      updates.name = args.name;
-    }
-    if (args.permissions !== undefined) {
-      updates.permissions = args.permissions;
-    }
+    if (args.name !== undefined) updates.name = args.name;
+    if (args.permissions !== undefined) updates.permissions = args.permissions;
 
     await ctx.db.patch(args.id, updates);
   },
@@ -93,9 +91,7 @@ export const hasPermission = query({
   },
   handler: async (ctx, args) => {
     const admin = await ctx.db.get(args.id);
-    if (!admin) {
-      return false;
-    }
+    if (!admin) return false;
     return admin.permissions.includes(args.permission);
   },
 });

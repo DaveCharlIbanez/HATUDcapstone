@@ -75,7 +75,7 @@ export default defineSchema({
 
   rides: defineTable({
     commuterId: v.id("commuters"),
-    operatorId: v.id("operators"),
+    operatorId: v.optional(v.id("operators")),
     pickup: v.object({
       address: v.string(),
       latitude: v.number(),
@@ -86,6 +86,9 @@ export default defineSchema({
       latitude: v.number(),
       longitude: v.number(),
     }),
+    vehicleType: v.optional(
+      v.union(v.literal("economy"), v.literal("comfort"), v.literal("xl"))
+    ),
     status: v.union(
       v.literal("pending"),
       v.literal("accepted"),
@@ -113,4 +116,22 @@ export default defineSchema({
   })
     .index("by_rideId", ["rideId"])
     .index("by_operatorId", ["operatorId"]),
+
+  sessions: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    isRevoked: v.boolean(),
+  })
+    .index("by_token", ["token"])
+    .index("by_userId", ["userId"]),
+
+  loginAttempts: defineTable({
+    email: v.string(),
+    count: v.number(),
+    lastAttemptAt: v.number(),
+    lockedUntil: v.optional(v.number()),
+  })
+    .index("by_email", ["email"]),
 });

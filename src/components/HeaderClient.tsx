@@ -5,12 +5,23 @@ import { usePathname } from "next/navigation";
 
 export default function HeaderClient() {
   const pathname = usePathname();
-  const isHome = pathname === "/";
-  const isLogin = pathname?.startsWith("/login");
-  const isSignup = pathname?.startsWith("/signup");
 
-  // Show header on all pages except home, login, and signup
-  if (isHome || isLogin || isSignup) {
+  // Full-screen map pages that have their own in-page floating header.
+  const fullScreenMapRoutes = new Set([
+    "/Commuters",
+    "/operator",
+    "/operator/map",
+    "/map",
+  ]);
+
+  const hideGlobalHeader =
+    pathname === "/" ||
+    pathname?.startsWith("/login") ||
+    pathname?.startsWith("/signup") ||
+    (pathname != null && fullScreenMapRoutes.has(pathname));
+
+  // Show header on document-style pages only (profiles, admin, payment, feedback)
+  if (hideGlobalHeader) {
     return null;
   }
 

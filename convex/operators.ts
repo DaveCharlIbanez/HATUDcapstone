@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
+import { requireOperatorOwnership } from "./lib/withAuth";
 
 export const getByUserId = query({
   args: { userId: v.id("users") },
@@ -33,7 +34,8 @@ export const listAvailable = query({
       .collect(),
 });
 
-export const create = mutation({
+// Internal only — called by auth.signup, not directly by clients
+export const create = internalMutation({
   args: {
     userId: v.id("users"),
     name: v.string(),
@@ -83,6 +85,7 @@ export const create = mutation({
 
 export const setAvailability = mutation({
   args: {
+    sessionToken: v.string(),
     id: v.id("operators"),
     isAvailable: v.boolean(),
     currentLocation: v.optional(
@@ -93,10 +96,7 @@ export const setAvailability = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const operator = await ctx.db.get(args.id);
-    if (!operator) {
-      throw new Error("Operator not found");
-    }
+    await requireOperatorOwnership(ctx, args.sessionToken, args.id);
 
     await ctx.db.patch(args.id, {
       isAvailable: args.isAvailable,
@@ -108,6 +108,7 @@ export const setAvailability = mutation({
 
 export const updateLocation = mutation({
   args: {
+    sessionToken: v.string(),
     id: v.id("operators"),
     location: v.object({
       latitude: v.number(),
@@ -115,10 +116,7 @@ export const updateLocation = mutation({
     }),
   },
   handler: async (ctx, args) => {
-    const operator = await ctx.db.get(args.id);
-    if (!operator) {
-      throw new Error("Operator not found");
-    }
+    await requireOperatorOwnership(ctx, args.sessionToken, args.id);
 
     await ctx.db.patch(args.id, {
       currentLocation: args.location,
@@ -129,6 +127,7 @@ export const updateLocation = mutation({
 
 export const update = mutation({
   args: {
+    sessionToken: v.string(),
     id: v.id("operators"),
     name: v.optional(v.string()),
     phone: v.optional(v.string()),
@@ -141,21 +140,15 @@ export const update = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    await requireOperatorOwnership(ctx, args.sessionToken, args.id);
+
     const operator = await ctx.db.get(args.id);
-    if (!operator) {
-      throw new Error("Operator not found");
-    }
+    if (!operator) throw new Error("Operator not found");
 
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
-    if (args.name !== undefined) {
-      updates.name = args.name;
-    }
-    if (args.phone !== undefined) {
-      updates.phone = args.phone;
-    }
-    if (args.vehicleInfo !== undefined) {
-      updates.vehicleInfo = args.vehicleInfo;
-    }
+    if (args.name !== undefined) updates.name = args.name;
+    if (args.phone !== undefined) updates.phone = args.phone;
+    if (args.vehicleInfo !== undefined) updates.vehicleInfo = args.vehicleInfo;
 
     await ctx.db.patch(args.id, updates);
   },

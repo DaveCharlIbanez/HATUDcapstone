@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { FaFacebookF, FaGoogle } from "react-icons/fa6";
 import { useAuth } from "@/lib/authContext";
 
@@ -14,12 +14,14 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, user } = useAuth();
 
-  if (user) {
-    router.push(
-      `/${user.role === "admin" ? "admin" : user.role === "operator" ? "operator" : "Commuters"}`
-    );
-    return null;
-  }
+  // Redirect already-authenticated users away from the login page
+  useEffect(() => {
+    if (user) {
+      router.replace(
+        `/${user.role === "admin" ? "admin" : user.role === "operator" ? "operator" : "Commuters"}`
+      );
+    }
+  }, [user, router]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -30,14 +32,10 @@ export default function LoginPage() {
 
     setIsLoading(false);
 
-    if (result.success) {
-      const role = user?.role || "commuter";
-      router.push(
-        `/${role === "admin" ? "admin" : role === "operator" ? "operator" : "Commuters"}`
-      );
-    } else {
+    if (!result.success) {
       setError(result.error || "Login failed");
     }
+    // Navigation is handled reactively by the useEffect above once `user` is set
   };
 
   return (
@@ -114,12 +112,14 @@ export default function LoginPage() {
           <div className="flex justify-center gap-4">
             <button
               className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 transition-all hover:scale-105 hover:bg-slate-700"
+              onClick={() => alert("Social login coming soon.")}
               type="button"
             >
               <FaGoogle className="text-red-400 text-xl" />
             </button>
             <button
               className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 transition-all hover:scale-105 hover:bg-slate-700"
+              onClick={() => alert("Social login coming soon.")}
               type="button"
             >
               <FaFacebookF className="text-blue-400 text-xl" />
@@ -136,12 +136,6 @@ export default function LoginPage() {
             </Link>
           </p>
 
-          <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-slate-500 text-xs">
-            <p className="mb-2 font-semibold text-slate-400">Demo Accounts:</p>
-            <p>Admin: admin@hatud.com / 123456789</p>
-            <p>Commuter: commuter1@hatud.com / password123</p>
-            <p>Operator: operator1@hatud.com / password123</p>
-          </div>
         </div>
       </div>
     </div>

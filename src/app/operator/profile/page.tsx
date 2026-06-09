@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   FaChartLine,
@@ -53,7 +54,14 @@ const rideHistory: RideSummary[] = [
 
 export default function OperatorProfilePage() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user, isLoading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && !user) { router.push("/login"); return; }
+    if (!authLoading && user && user.role !== "operator") {
+      router.push(user.role === "admin" ? "/admin" : "/Commuters");
+    }
+  }, [user, authLoading, router]);
 
   const handleCallRider = () => {
     window.location.href = "tel:+639123456789";
@@ -370,14 +378,14 @@ export default function OperatorProfilePage() {
                 </button>
                 <button
                   className="w-full rounded-3xl bg-sky-600 px-4 py-3 font-semibold text-sm text-white transition hover:bg-sky-500"
-                  onClick={() => router.push("/operator/map")}
+                  onClick={() => router.push("/operator/profile")}
                   type="button"
                 >
                   Manage vehicle
                 </button>
                 <button
                   className="w-full rounded-3xl border border-slate-700 bg-slate-800 px-4 py-3 font-semibold text-slate-300 text-sm transition hover:bg-slate-700"
-                  onClick={() => router.push("/operator")}
+                  onClick={() => alert("Payout statements coming soon.")}
                   type="button"
                 >
                   View payout statement

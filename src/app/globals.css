@@ -157,3 +157,9 @@ body {
   color: var(--foreground);
   background: var(--background);
 }
+
+/* MapLibre adds .maplibregl-map to its container; keep its drag/pan gestures
+   scoped to the canvas so they don't fight overlay scroll panels on mobile. */
+.maplibregl-map {
+  touch-action: none;
+}
