@@ -33,6 +33,7 @@ async function verifyPasswordPBKDF2(password: string, stored: string): Promise<b
   const parts = stored.split(":");
   if (parts.length !== 4 || parts[0] !== "pbkdf2") return false;
   const [, iterStr, saltB64, expectedB64] = parts;
+  if (saltB64 === undefined || expectedB64 === undefined) return false;
 
   // Guard against a tampered iteration count in the stored hash
   const iterations = Number(iterStr);
@@ -67,8 +68,8 @@ async function hashSHA256Legacy(password: string): Promise<string> {
 
 function generateSessionToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
   const h = Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");

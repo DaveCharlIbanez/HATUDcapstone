@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import HeaderClient from "@/components/HeaderClient";
+import { RouteGuard } from "@/components/RouteGuard";
 import { ToastProvider } from "@/components/Toast";
 import { AuthProvider } from "@/lib/authContext";
 import { ConvexProvider } from "@/lib/convexClient";
@@ -35,7 +36,9 @@ export default function RootLayout({
             <ToastProvider>
               <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors duration-200">
                 <HeaderClient />
-                <main>{children}</main>
+                <main>
+                  <RouteGuard>{children}</RouteGuard>
+                </main>
               </div>
             </ToastProvider>
           </AuthProvider>

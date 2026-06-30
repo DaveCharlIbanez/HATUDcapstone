@@ -7,8 +7,8 @@ import { useRouter } from "next/navigation";
 import { FaClock, FaMapMarkerAlt, FaSignOutAlt, FaUser } from "react-icons/fa";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMutation, useQuery } from "convex/react";
-import type { Id } from "convex/values";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { useAuth } from "@/lib/authContext";
 
 interface Vehicle {

@@ -13,8 +13,8 @@ import {
   FaUserTie,
 } from "react-icons/fa";
 import { useMutation, useQuery } from "convex/react";
-import type { Id } from "convex/values";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { useAuth } from "@/lib/authContext";
 import { useRouter } from "next/navigation";
 

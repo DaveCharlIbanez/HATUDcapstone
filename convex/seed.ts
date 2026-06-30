@@ -158,9 +158,10 @@ export const seed = mutation({
       .withIndex("by_email")
       .collect();
 
-    if (commuters.length >= 2) {
+    const [firstCommuter, secondCommuter] = commuters;
+    if (firstCommuter && secondCommuter) {
       const ride1 = await ctx.db.insert("rides", {
-        commuterId: commuters[0]._id,
+        commuterId: firstCommuter._id,
         operatorId: operator1Id,
         pickup: {
           address: "123 Mabini St, San Jose, Antique",
@@ -182,7 +183,7 @@ export const seed = mutation({
 
       await ctx.db.insert("feedback", {
         rideId: ride1,
-        commuterId: commuters[0]._id,
+        commuterId: firstCommuter._id,
         operatorId: operator1Id,
         rating: 5,
         comment: "Great ride!",
@@ -190,7 +191,7 @@ export const seed = mutation({
       });
 
       await ctx.db.insert("rides", {
-        commuterId: commuters[1]._id,
+        commuterId: secondCommuter._id,
         operatorId: operator2Id,
         pickup: {
           address: "789 University Ave, Sibalom, Antique",
@@ -211,7 +212,7 @@ export const seed = mutation({
       });
 
       await ctx.db.insert("rides", {
-        commuterId: commuters[0]._id,
+        commuterId: firstCommuter._id,
         operatorId: operator1Id,
         pickup: {
           address: "456 Cervantes St, San Jose, Antique",
@@ -406,9 +407,10 @@ const operator1Id = await ctx.db.insert("operators", {
       .withIndex("by_email")
       .collect();
 
-    if (commutersData.length >= 2) {
+    const [firstCommuterData, secondCommuterData] = commutersData;
+    if (firstCommuterData && secondCommuterData) {
       const ride1 = await ctx.db.insert("rides", {
-        commuterId: commutersData[0]._id,
+        commuterId: firstCommuterData._id,
         operatorId: operator1Id,
         pickup: {
           address: "123 Mabini St, San Jose, Antique",
@@ -430,7 +432,7 @@ const operator1Id = await ctx.db.insert("operators", {
 
       await ctx.db.insert("feedback", {
         rideId: ride1,
-        commuterId: commutersData[0]._id,
+        commuterId: firstCommuterData._id,
         operatorId: operator1Id,
         rating: 5,
         comment: "Great ride!",
@@ -438,7 +440,7 @@ const operator1Id = await ctx.db.insert("operators", {
       });
 
       await ctx.db.insert("rides", {
-        commuterId: commutersData[1]._id,
+        commuterId: secondCommuterData._id,
         operatorId: operator2Id,
         pickup: {
           address: "789 University Ave, Sibalom, Antique",
@@ -459,7 +461,7 @@ const operator1Id = await ctx.db.insert("operators", {
       });
 
       await ctx.db.insert("rides", {
-        commuterId: commutersData[0]._id,
+        commuterId: firstCommuterData._id,
         operatorId: operator1Id,
         pickup: {
           address: "456 Cervantes St, San Jose, Antique",
