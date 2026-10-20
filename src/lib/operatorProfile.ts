@@ -15,7 +15,7 @@ export const operatorProfile: OperatorProfile = {
   name: "Rodel Mercado",
   email: "rodel.mercado@hatud.app",
   phone: "+63 912 345 6789",
-  vehicle: "Toyota Veloz",
+  vehicle: "Yamaha NMAX 155",
   plate: "NJU 1245",
   region: "Antique, PH",
   rating: 4.9,

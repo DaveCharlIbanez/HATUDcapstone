@@ -85,14 +85,22 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db.get(args.id);
-    if (!existing) throw new Error("Commuter not found");
+    if (!existing) {
+      throw new Error("Commuter not found");
+    }
 
     await requireCommuterOwnership(ctx, args.sessionToken, args.id);
 
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
-    if (args.name !== undefined) updates.name = args.name;
-    if (args.phone !== undefined) updates.phone = args.phone;
-    if (args.savedLocations !== undefined) updates.savedLocations = args.savedLocations;
+    if (args.name !== undefined) {
+      updates.name = args.name;
+    }
+    if (args.phone !== undefined) {
+      updates.phone = args.phone;
+    }
+    if (args.savedLocations !== undefined) {
+      updates.savedLocations = args.savedLocations;
+    }
 
     await ctx.db.patch(args.id, updates);
   },
@@ -111,7 +119,9 @@ export const addSavedLocation = mutation({
   },
   handler: async (ctx, args) => {
     const commuter = await ctx.db.get(args.id);
-    if (!commuter) throw new Error("Commuter not found");
+    if (!commuter) {
+      throw new Error("Commuter not found");
+    }
 
     await requireCommuterOwnership(ctx, args.sessionToken, args.id);
 

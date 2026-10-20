@@ -101,9 +101,8 @@ export const getActiveByOperator = query({
       .order("desc")
       .collect();
     return (
-      rides.find(
-        (r) => r.status === "accepted" || r.status === "inProgress"
-      ) ?? null
+      rides.find((r) => r.status === "accepted" || r.status === "inProgress") ??
+      null
     );
   },
 });
@@ -122,11 +121,7 @@ export const create = mutation({
       latitude: v.number(),
       longitude: v.number(),
     }),
-    vehicleType: v.union(
-      v.literal("economy"),
-      v.literal("comfort"),
-      v.literal("xl")
-    ),
+    vehicleType: v.union(v.literal("standard"), v.literal("priority")),
     fare: v.optional(v.number()),
     distance: v.optional(v.number()),
   },
@@ -164,7 +159,9 @@ export const updateStatus = mutation({
     const { userId, role } = await requireAuth(ctx, args.sessionToken);
 
     const ride = await ctx.db.get(args.id);
-    if (!ride) throw new Error("Ride not found");
+    if (!ride) {
+      throw new Error("Ride not found");
+    }
 
     // Role-based status whitelist
     const allowed =
@@ -217,8 +214,12 @@ export const accept = mutation({
     await requireOperatorOwnership(ctx, args.sessionToken, args.operatorId);
 
     const ride = await ctx.db.get(args.id);
-    if (!ride) throw new Error("Ride not found");
-    if (ride.status !== "pending") throw new Error("Ride is not in pending status");
+    if (!ride) {
+      throw new Error("Ride not found");
+    }
+    if (ride.status !== "pending") {
+      throw new Error("Ride is not in pending status");
+    }
 
     const now = Date.now();
     await ctx.db.patch(args.id, {
@@ -243,15 +244,19 @@ export const cancel = mutation({
     const { userId, role } = await requireAuth(ctx, args.sessionToken);
 
     const ride = await ctx.db.get(args.id);
-    if (!ride) throw new Error("Ride not found");
+    if (!ride) {
+      throw new Error("Ride not found");
+    }
 
     // Admins can cancel any ride; commuters/operators can only cancel their own
     if (role !== "admin") {
       const commuter = await ctx.db.get(ride.commuterId);
-      const operator = ride.operatorId ? await ctx.db.get(ride.operatorId) : null;
+      const operator = ride.operatorId
+        ? await ctx.db.get(ride.operatorId)
+        : null;
       const isCommuterOwner = commuter?.userId === userId;
       const isOperatorOwner = operator?.userId === userId;
-      if (!isCommuterOwner && !isOperatorOwner) {
+      if (!(isCommuterOwner || isOperatorOwner)) {
         throw new Error("Forbidden: you cannot cancel this ride");
       }
     }
@@ -273,7 +278,9 @@ export const complete = mutation({
     await requireOperatorOwnership(ctx, args.sessionToken, args.operatorId);
 
     const ride = await ctx.db.get(args.id);
-    if (!ride) throw new Error("Ride not found");
+    if (!ride) {
+      throw new Error("Ride not found");
+    }
     if (ride.status !== "accepted" && ride.status !== "inProgress") {
       throw new Error("Ride cannot be completed from current status");
     }
@@ -288,5 +295,107 @@ export const complete = mutation({
       isAvailable: true,
       updatedAt: now,
     });
+  },
+});
+
+export const updateOperatorLocation = mutation({
+  args: {
+    sessionToken: v.string(),
+    rideId: v.id("rides"),
+    latitude: v.number(),
+    longitude: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const { userId, role } = await requireAuth(ctx, args.sessionToken);
+
+    const ride = await ctx.db.get(args.rideId);
+    if (!ride) {
+      throw new Error("Ride not found");
+    }
+
+    if (role !== "operator" && role !== "admin") {
+      throw new Error("Forbidden: only operators can update operator location");
+    }
+
+    if (role === "operator") {
+      const operator = await ctx.db
+        .query("operators")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .first();
+      if (!operator || ride.operatorId !== operator._id) {
+        throw new Error("Forbidden: this ride is not assigned to you");
+      }
+    }
+
+    await ctx.db.patch(args.rideId, {
+      operatorLocation: {
+        latitude: args.latitude,
+        longitude: args.longitude,
+        updatedAt: Date.now(),
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const updateCommuterLocation = mutation({
+  args: {
+    sessionToken: v.string(),
+    rideId: v.id("rides"),
+    latitude: v.number(),
+    longitude: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const { userId, role } = await requireAuth(ctx, args.sessionToken);
+
+    const ride = await ctx.db.get(args.rideId);
+    if (!ride) {
+      throw new Error("Ride not found");
+    }
+
+    if (role !== "commuter" && role !== "admin") {
+      throw new Error("Forbidden: only commuters can update commuter location");
+    }
+
+    if (role === "commuter") {
+      const commuter = await ctx.db
+        .query("commuters")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .first();
+      if (!commuter || ride.commuterId !== commuter._id) {
+        throw new Error("Forbidden: this ride does not belong to you");
+      }
+    }
+
+    await ctx.db.patch(args.rideId, {
+      commuterLocation: {
+        latitude: args.latitude,
+        longitude: args.longitude,
+        updatedAt: Date.now(),
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const getOperatorLocation = query({
+  args: { rideId: v.id("rides") },
+  handler: async (ctx, args) => {
+    const ride = await ctx.db.get(args.rideId);
+    if (!ride) {
+      return null;
+    }
+    return ride.operatorLocation ?? null;
+  },
+});
+
+export const getCommuterLocation = query({
+  args: { rideId: v.id("rides") },
+  handler: async (ctx, args) => {
+    const ride = await ctx.db.get(args.rideId);
+    if (!ride) {
+      return null;
+    }
+    return ride.commuterLocation ?? null;
   },
 });

@@ -87,7 +87,11 @@ export const getMetrics = query({
           feedbacks.length > 0
             ? feedbacks.reduce((sum, f) => sum + f.rating, 0) / feedbacks.length
             : 0;
-        return { ...op, averageRating: avgRating, totalRatings: feedbacks.length };
+        return {
+          ...op,
+          averageRating: avgRating,
+          totalRatings: feedbacks.length,
+        };
       })
     );
 

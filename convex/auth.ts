@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
+
 // MutationCtx used by rate-limiting helpers
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -21,7 +22,12 @@ async function hashPasswordPBKDF2(password: string): Promise<string> {
     ["deriveBits"]
   );
   const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: saltBytes, iterations: PBKDF2_ITERATIONS },
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: saltBytes,
+      iterations: PBKDF2_ITERATIONS,
+    },
     keyMaterial,
     256
   );
@@ -29,15 +35,24 @@ async function hashPasswordPBKDF2(password: string): Promise<string> {
   return `pbkdf2:${PBKDF2_ITERATIONS}:${saltB64}:${hashB64}`;
 }
 
-async function verifyPasswordPBKDF2(password: string, stored: string): Promise<boolean> {
+async function verifyPasswordPBKDF2(
+  password: string,
+  stored: string
+): Promise<boolean> {
   const parts = stored.split(":");
-  if (parts.length !== 4 || parts[0] !== "pbkdf2") return false;
+  if (parts.length !== 4 || parts[0] !== "pbkdf2") {
+    return false;
+  }
   const [, iterStr, saltB64, expectedB64] = parts;
-  if (saltB64 === undefined || expectedB64 === undefined) return false;
+  if (saltB64 === undefined || expectedB64 === undefined) {
+    return false;
+  }
 
   // Guard against a tampered iteration count in the stored hash
   const iterations = Number(iterStr);
-  if (!Number.isInteger(iterations) || iterations < 100_000) return false;
+  if (!Number.isInteger(iterations) || iterations < 100_000) {
+    return false;
+  }
 
   const saltBytes = Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0));
   const keyMaterial = await crypto.subtle.importKey(
@@ -57,7 +72,7 @@ async function verifyPasswordPBKDF2(password: string, stored: string): Promise<b
 
 // Only used for migrating legacy SHA-256 hashes on first login
 async function hashSHA256Legacy(password: string): Promise<string> {
-  const data = new TextEncoder().encode(password + "hatud_salt_2024");
+  const data = new TextEncoder().encode(`${password}hatud_salt_2024`);
   const buf = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(buf))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -85,7 +100,9 @@ async function checkRateLimit(ctx: MutationCtx, email: string) {
     .first();
   if (rec?.lockedUntil && Date.now() < rec.lockedUntil) {
     const mins = Math.ceil((rec.lockedUntil - Date.now()) / 60_000);
-    throw new Error(`Account locked. Try again in ${mins} minute${mins === 1 ? "" : "s"}.`);
+    throw new Error(
+      `Account locked. Try again in ${mins} minute${mins === 1 ? "" : "s"}.`
+    );
   }
 }
 
@@ -96,11 +113,17 @@ async function recordFailedAttempt(ctx: MutationCtx, email: string) {
     .first();
   const count = (rec?.count ?? 0) + 1;
   const lockedUntil =
-    count >= 10 ? Date.now() + 3_600_000
-    : count >= 5 ? Date.now() + 900_000
-    : undefined;
+    count >= 10
+      ? Date.now() + 3_600_000
+      : count >= 5
+        ? Date.now() + 900_000
+        : undefined;
   if (rec) {
-    await ctx.db.patch(rec._id, { count, lastAttemptAt: Date.now(), lockedUntil });
+    await ctx.db.patch(rec._id, {
+      count,
+      lastAttemptAt: Date.now(),
+      lockedUntil,
+    });
   } else {
     await ctx.db.insert("loginAttempts", {
       email,
@@ -146,24 +169,31 @@ export const signup = mutation({
   },
   handler: async (ctx, args) => {
     // Server-side password strength validation
-    if (args.password.length < 8)
+    if (args.password.length < 8) {
       throw new Error("Password must be at least 8 characters");
-    if (!/[A-Z]/.test(args.password))
+    }
+    if (!/[A-Z]/.test(args.password)) {
       throw new Error("Password must contain at least one uppercase letter");
-    if (!/[0-9]/.test(args.password))
+    }
+    if (!/[0-9]/.test(args.password)) {
       throw new Error("Password must contain at least one number");
+    }
 
     const existingEmail = await ctx.db
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", args.email))
       .first();
-    if (existingEmail) throw new Error("Email already registered");
+    if (existingEmail) {
+      throw new Error("Email already registered");
+    }
 
     const existingPhone = await ctx.db
       .query("users")
       .withIndex("by_phone", (q) => q.eq("phone", args.phone))
       .first();
-    if (existingPhone) throw new Error("Phone number already registered");
+    if (existingPhone) {
+      throw new Error("Phone number already registered");
+    }
 
     const passwordHash = await hashPasswordPBKDF2(args.password);
     const now = Date.now();
@@ -240,12 +270,15 @@ export const login = mutation({
     let valid = await verifyPasswordPBKDF2(args.password, user.passwordHash);
 
     // Transparent migration: if old SHA-256 hash, verify then re-hash with PBKDF2
-    if (!valid && !user.passwordHash.startsWith("pbkdf2:")) {
+    if (!(valid || user.passwordHash.startsWith("pbkdf2:"))) {
       const legacyHash = await hashSHA256Legacy(args.password);
       if (legacyHash === user.passwordHash) {
         valid = true;
         const newHash = await hashPasswordPBKDF2(args.password);
-        await ctx.db.patch(user._id, { passwordHash: newHash, updatedAt: Date.now() });
+        await ctx.db.patch(user._id, {
+          passwordHash: newHash,
+          updatedAt: Date.now(),
+        });
       }
     }
 
@@ -268,9 +301,11 @@ export const login = mutation({
 
     // Fetch display name from the role-specific profile table
     const profileTable =
-      user.role === "commuter" ? "commuters"
-      : user.role === "operator" ? "operators"
-      : "admins";
+      user.role === "commuter"
+        ? "commuters"
+        : user.role === "operator"
+          ? "operators"
+          : "admins";
     const profile = await ctx.db
       .query(profileTable)
       .withIndex("by_userId", (q) => q.eq("userId", user._id))
@@ -310,12 +345,16 @@ export const getSession = query({
     }
 
     const user = await ctx.db.get(session.userId);
-    if (!user) return null;
+    if (!user) {
+      return null;
+    }
 
     const profileTable =
-      user.role === "commuter" ? "commuters"
-      : user.role === "operator" ? "operators"
-      : "admins";
+      user.role === "commuter"
+        ? "commuters"
+        : user.role === "operator"
+          ? "operators"
+          : "admins";
     const profile = await ctx.db
       .query(profileTable)
       .withIndex("by_userId", (q) => q.eq("userId", user._id))

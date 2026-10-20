@@ -13,35 +13,38 @@ import { api } from "../../convex/_generated/api";
 
 type UserRole = "commuter" | "operator" | "admin";
 
-type User = {
-  userId: string;  // read-only: used only for getByUserId profile lookups
+interface User {
+  email: string;
+  name: string;
   role: UserRole;
-  name: string;
-  email: string;
-};
+  userId: string; // read-only: used only for getByUserId profile lookups
+}
 
-type AuthContextType = {
-  user: User | null;
+interface AuthContextType {
   isLoading: boolean;
-  sessionToken: string | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (data: SignupData) => Promise<{ success: boolean; error?: string }>;
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
-};
+  sessionToken: string | null;
+  signup: (data: SignupData) => Promise<{ success: boolean; error?: string }>;
+  user: User | null;
+}
 
-type SignupData = {
-  name: string;
+interface SignupData {
   email: string;
-  phone: string;
-  password: string;
-  role: "commuter" | "operator";
   licenseNumber?: string;
+  name: string;
+  password: string;
+  phone: string;
+  role: "commuter" | "operator";
   vehicleInfo?: {
     plateNumber: string;
     model: string;
     color: string;
   };
-};
+}
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -77,7 +80,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     // sessionData is undefined while the query is loading
-    if (sessionData === undefined) return;
+    if (sessionData === undefined) {
+      return;
+    }
 
     if (sessionData === null) {
       // Token invalid or expired — clear it
@@ -86,7 +91,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSessionToken(null);
       setUser(null);
     } else {
-      setUser({ userId: sessionData.userId, role: sessionData.role, name: sessionData.name, email: sessionData.email });
+      setUser({
+        userId: sessionData.userId,
+        role: sessionData.role,
+        name: sessionData.name,
+        email: sessionData.email,
+      });
     }
     setIsLoading(false);
   }, [sessionData, sessionToken]);
@@ -154,7 +164,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, sessionToken, login, signup, logout }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, sessionToken, login, signup, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

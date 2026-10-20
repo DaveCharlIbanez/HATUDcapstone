@@ -33,7 +33,7 @@ export default function AdminPage() {
     api.adminQueries.getPendingDrivers,
     sessionToken ? { sessionToken } : "skip"
   );
-  const allRides = useQuery(
+  const _allRides = useQuery(
     api.adminQueries.getAllRides,
     sessionToken ? { sessionToken } : "skip"
   );
@@ -42,7 +42,8 @@ export default function AdminPage() {
     if (!(authLoading || user)) {
       router.push("/login");
     } else if (!authLoading && user && user.role !== "admin") {
-      const targetRoute = user.role === "operator" ? "/operator" : "/Commuters";
+      const targetRoute =
+        user.role === "operator" ? "/operator" : "/map";
       router.push(targetRoute);
     }
   }, [user, authLoading, router]);
@@ -102,22 +103,22 @@ export default function AdminPage() {
 
   if (authLoading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
-        <p className="text-slate-400">Loading...</p>
+      <div className="flex min-h-screen items-center justify-center bg-[var(--background)] text-[var(--foreground)]">
+        <p className="text-[var(--text-muted)]">Loading...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <div className="mx-auto max-w-6xl px-4 py-6">
-        <header className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-xl sm:flex-row sm:items-center sm:justify-between">
+        <header className="flex flex-col gap-4 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-xl sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sky-400 text-sm uppercase tracking-[0.2em]">
               Admin Panel
             </p>
             <h1 className="mt-2 font-semibold text-3xl">Hatud Operations</h1>
-            <p className="mt-2 max-w-2xl text-slate-400">
+            <p className="mt-2 max-w-2xl text-[var(--text-muted)]">
               Monitor fleet activity, manage operator approvals, and review
               trips from a single, clean admin workspace.
             </p>
@@ -137,40 +138,42 @@ export default function AdminPage() {
             const Icon = metric.icon;
             return (
               <div
-                className="cursor-pointer rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm transition hover:border-sky-500 hover:bg-slate-800"
+                className="cursor-pointer rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm transition hover:border-sky-500 hover:bg-[var(--surface-strong)]"
                 key={metric.label}
               >
                 <div className="flex items-center justify-between">
-                  <p className="text-slate-500 text-sm uppercase tracking-[0.16em]">
+                  <p className="text-[var(--text-muted)] text-sm uppercase tracking-[0.16em]">
                     {metric.label}
                   </p>
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-800 text-sky-400">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--surface-strong)] text-sky-400">
                     <Icon />
                   </span>
                 </div>
-                <p className="mt-6 font-semibold text-4xl text-slate-100">
+                <p className="mt-6 font-semibold text-4xl text-[var(--foreground)]">
                   {metric.value}
                 </p>
-                <p className="mt-2 text-slate-400 text-sm">Updated just now</p>
+                <p className="mt-2 text-[var(--text-muted)] text-sm">
+                  Updated just now
+                </p>
               </div>
             );
           })}
         </section>
 
-        <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
+        <section className="mt-6 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm">
           <button
             className="flex w-full cursor-pointer items-center justify-between"
             onClick={() => toggleSection("drivers")}
           >
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-800 text-sky-400">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-strong)] text-sky-400">
                 <FaUserCheck />
               </span>
               <div className="text-left">
-                <p className="font-semibold text-slate-100">
+                <p className="font-semibold text-[var(--foreground)]">
                   Driver Credentials & Approvals
                 </p>
-                <p className="text-slate-500 text-sm">
+                <p className="text-[var(--text-muted)] text-sm">
                   Review and approve pending driver applications
                 </p>
               </div>
@@ -187,16 +190,18 @@ export default function AdminPage() {
               {pendingDrivers && pendingDrivers.length > 0 ? (
                 pendingDrivers.map((driver) => (
                   <div
-                    className="rounded-2xl border border-slate-700 bg-slate-800 p-4"
+                    className="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-4"
                     key={driver._id}
                   >
                     <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                       <div className="flex-1">
-                        <p className="font-semibold text-slate-100">
+                        <p className="font-semibold text-[var(--foreground)]">
                           {driver.name}
                         </p>
-                        <p className="text-slate-400 text-sm">{driver.email}</p>
-                        <div className="mt-2 flex items-center gap-4 text-slate-400 text-sm">
+                        <p className="text-[var(--text-muted)] text-sm">
+                          {driver.email}
+                        </p>
+                        <div className="mt-2 flex items-center gap-4 text-[var(--text-muted)] text-sm">
                           <span>License: {driver.licenseNumber}</span>
                           <span>
                             Vehicle: {driver.vehicleInfo?.model} (
@@ -223,7 +228,7 @@ export default function AdminPage() {
                   </div>
                 ))
               ) : (
-                <p className="py-4 text-center text-slate-500">
+                <p className="py-4 text-center text-[var(--text-muted)]">
                   No drivers pending approval
                 </p>
               )}
@@ -231,18 +236,20 @@ export default function AdminPage() {
           )}
         </section>
 
-        <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
+        <section className="mt-6 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm">
           <button
             className="flex w-full cursor-pointer items-center justify-between"
             onClick={() => toggleSection("maps")}
           >
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-800 text-sky-400">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-strong)] text-sky-400">
                 <FaMapMarkerAlt />
               </span>
               <div className="text-left">
-                <p className="font-semibold text-slate-100">Map Management</p>
-                <p className="text-slate-500 text-sm">
+                <p className="font-semibold text-[var(--foreground)]">
+                  Map Management
+                </p>
+                <p className="text-[var(--text-muted)] text-sm">
                   Edit routes, zones, and service areas
                 </p>
               </div>
@@ -281,20 +288,20 @@ export default function AdminPage() {
           )}
         </section>
 
-        <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
+        <section className="mt-6 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm">
           <button
             className="flex w-full cursor-pointer items-center justify-between"
             onClick={() => toggleSection("dropout")}
           >
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-800 text-red-400">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-strong)] text-red-400">
                 <FaExclamationTriangle />
               </span>
               <div className="text-left">
-                <p className="font-semibold text-slate-100">
+                <p className="font-semibold text-[var(--foreground)]">
                   Customer Dropout Analysis
                 </p>
-                <p className="text-slate-500 text-sm">
+                <p className="text-[var(--text-muted)] text-sm">
                   Reasons why clients stop using the app
                 </p>
               </div>
@@ -310,15 +317,15 @@ export default function AdminPage() {
             <div className="mt-6 space-y-4">
               {dropoutReasons.map((item) => (
                 <div
-                  className="rounded-2xl border border-slate-700 bg-slate-800 p-4"
+                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-4"
                   key={item.reason}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <p className="font-semibold text-slate-100">
+                      <p className="font-semibold text-[var(--foreground)]">
                         {item.reason}
                       </p>
-                      <p className="mt-1 text-slate-400 text-sm">
+                      <p className="mt-1 text-[var(--text-muted)] text-sm">
                         Total: {item.count} users
                       </p>
                     </div>
@@ -328,7 +335,7 @@ export default function AdminPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-700">
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--surface-muted)]">
                     <div
                       className="h-full bg-red-500"
                       style={{ width: `${item.percentage}%` }}
@@ -341,14 +348,16 @@ export default function AdminPage() {
         </section>
 
         <section className="mt-6 grid gap-4 sm:grid-cols-3">
-          <div className="cursor-pointer rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm transition hover:border-sky-500 hover:bg-slate-800">
+          <div className="cursor-pointer rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm transition hover:border-sky-500 hover:bg-[var(--surface-strong)]">
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-800 text-sky-400">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-strong)] text-sky-400">
                 <FaClipboardList />
               </span>
               <div>
-                <p className="font-semibold text-slate-100">Review Requests</p>
-                <p className="text-slate-500 text-sm">
+                <p className="font-semibold text-[var(--foreground)]">
+                  Review Requests
+                </p>
+                <p className="text-[var(--text-muted)] text-sm">
                   Approve new driver activity
                 </p>
               </div>
@@ -362,14 +371,18 @@ export default function AdminPage() {
             </button>
           </div>
 
-          <div className="cursor-pointer rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm transition hover:border-sky-500 hover:bg-slate-800">
+          <div className="cursor-pointer rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm transition hover:border-sky-500 hover:bg-[var(--surface-strong)]">
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-800 text-sky-400">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-strong)] text-sky-400">
                 <FaUsers />
               </span>
               <div>
-                <p className="font-semibold text-slate-100">Manage Accounts</p>
-                <p className="text-slate-500 text-sm">Update operator status</p>
+                <p className="font-semibold text-[var(--foreground)]">
+                  Manage Accounts
+                </p>
+                <p className="text-[var(--text-muted)] text-sm">
+                  Update operator status
+                </p>
               </div>
             </div>
             <button
@@ -381,14 +394,18 @@ export default function AdminPage() {
             </button>
           </div>
 
-          <div className="cursor-pointer rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-sm transition hover:border-sky-500 hover:bg-slate-800">
+          <div className="cursor-pointer rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm transition hover:border-sky-500 hover:bg-[var(--surface-strong)]">
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-800 text-sky-400">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-strong)] text-sky-400">
                 <FaChartLine />
               </span>
               <div>
-                <p className="font-semibold text-slate-100">View Reports</p>
-                <p className="text-slate-500 text-sm">See earnings summaries</p>
+                <p className="font-semibold text-[var(--foreground)]">
+                  View Reports
+                </p>
+                <p className="text-[var(--text-muted)] text-sm">
+                  See earnings summaries
+                </p>
               </div>
             </div>
             <button

@@ -3,7 +3,9 @@ import { internalMutation, mutation, query } from "./_generated/server";
 
 // Strip the passwordHash field before returning any user document to the client
 function sanitize(user: Record<string, unknown> | null) {
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
   const { passwordHash: _omit, ...safe } = user as any;
   return safe;
 }
@@ -69,16 +71,24 @@ export const create = internalMutation({
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", args.email))
       .first();
-    if (existing) throw new Error("User with this email already exists");
+    if (existing) {
+      throw new Error("User with this email already exists");
+    }
 
     const existingPhone = await ctx.db
       .query("users")
       .withIndex("by_phone", (q) => q.eq("phone", args.phone))
       .first();
-    if (existingPhone) throw new Error("User with this phone number already exists");
+    if (existingPhone) {
+      throw new Error("User with this phone number already exists");
+    }
 
     const now = Date.now();
-    return await ctx.db.insert("users", { ...args, createdAt: now, updatedAt: now });
+    return await ctx.db.insert("users", {
+      ...args,
+      createdAt: now,
+      updatedAt: now,
+    });
   },
 });
 

@@ -9,66 +9,66 @@ export function getConvexUrl(): string {
   return convexUrl;
 }
 
-export type ConvexUser = {
-  id: string;
-  name: string;
+export interface ConvexUser {
+  createdAt: string;
   email: string;
+  id: string;
+  lastLoginAt?: string;
+  name: string;
   phone: string;
   role: "commuter" | "operator" | "admin";
-  createdAt: string;
-  lastLoginAt?: string;
-};
+}
 
-export type ConvexAuthSession = {
-  userId: string;
-  token: string;
-  issuedAt: string;
+export interface ConvexAuthSession {
   expiresAt: string;
-};
+  issuedAt: string;
+  token: string;
+  userId: string;
+}
 
-export type ConvexOperatorProfile = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  vehicle: string;
-  plate: string;
-  region: string;
-  rating: number;
+export interface ConvexOperatorProfile {
   earnings: number;
-  ridesToday: number;
-};
-
-export type ConvexCommuterProfile = {
+  email: string;
   id: string;
   name: string;
-  email: string;
   phone: string;
-  avatar?: string;
-  joinDate: string;
-  totalRides: number;
+  plate: string;
   rating: number;
-  totalSpent: number;
-};
+  region: string;
+  ridesToday: number;
+  vehicle: string;
+}
 
-export type ConvexRide = {
+export interface ConvexCommuterProfile {
+  avatar?: string;
+  email: string;
   id: string;
+  joinDate: string;
+  name: string;
+  phone: string;
+  rating: number;
+  totalRides: number;
+  totalSpent: number;
+}
+
+export interface ConvexRide {
   commuterId: string;
-  operatorId?: string;
+  cost: number;
+  createdAt: string;
   from: string;
+  id: string;
+  operatorId?: string;
+  rating?: number;
+  status: "requested" | "active" | "completed" | "cancelled";
   to: string;
   vehicle: string;
-  status: "requested" | "active" | "completed" | "cancelled";
-  cost: number;
-  rating?: number;
-  createdAt: string;
-};
+}
 
-export type ConvexPaymentMethod = {
-  id: string;
-  commuterId: string;
-  type: "card" | "cash";
+export interface ConvexPaymentMethod {
   brand?: string;
-  last4?: string;
+  commuterId: string;
+  id: string;
   isDefault: boolean;
-};
+  last4?: string;
+  type: "card" | "cash";
+}

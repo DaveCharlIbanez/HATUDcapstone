@@ -12,7 +12,9 @@ async function resolveSession(ctx: MutationCtx | QueryCtx, token: string) {
   }
 
   const user = await ctx.db.get(session.userId);
-  if (!user) throw new Error("Unauthorized: user not found");
+  if (!user) {
+    throw new Error("Unauthorized: user not found");
+  }
 
   return { userId: session.userId as Id<"users">, role: user.role };
 }
@@ -27,8 +29,9 @@ export async function requireRole(
   expectedRole: "commuter" | "operator" | "admin"
 ) {
   const { userId, role } = await resolveSession(ctx, token);
-  if (role !== expectedRole)
+  if (role !== expectedRole) {
     throw new Error(`Forbidden: requires ${expectedRole} role`);
+  }
   return { userId };
 }
 
@@ -38,9 +41,12 @@ export async function requireOwnership(
   resourceUserId: Id<"users">
 ) {
   const { userId, role } = await resolveSession(ctx, token);
-  if (role === "admin") return;
-  if (userId !== resourceUserId)
+  if (role === "admin") {
+    return;
+  }
+  if (userId !== resourceUserId) {
     throw new Error("Forbidden: you do not own this resource");
+  }
 }
 
 export async function requireOperatorOwnership(
@@ -49,10 +55,13 @@ export async function requireOperatorOwnership(
   operatorId: Id<"operators">
 ) {
   const { userId, role } = await resolveSession(ctx, token);
-  if (role === "admin") return;
+  if (role === "admin") {
+    return;
+  }
   const operator = await ctx.db.get(operatorId);
-  if (!operator || operator.userId !== userId)
+  if (!operator || operator.userId !== userId) {
     throw new Error("Forbidden: you do not own this operator profile");
+  }
 }
 
 export async function requireCommuterOwnership(
@@ -61,8 +70,11 @@ export async function requireCommuterOwnership(
   commuterId: Id<"commuters">
 ) {
   const { userId, role } = await resolveSession(ctx, token);
-  if (role === "admin") return;
+  if (role === "admin") {
+    return;
+  }
   const commuter = await ctx.db.get(commuterId);
-  if (!commuter || commuter.userId !== userId)
+  if (!commuter || commuter.userId !== userId) {
     throw new Error("Forbidden: you do not own this commuter profile");
+  }
 }

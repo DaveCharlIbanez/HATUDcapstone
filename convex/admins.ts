@@ -56,7 +56,11 @@ export const create = mutation({
       userId: args.userId,
       name: args.name,
       email: args.email,
-      permissions: args.permissions ?? ["view_all", "manage_users", "view_analytics"],
+      permissions: args.permissions ?? [
+        "view_all",
+        "manage_users",
+        "view_analytics",
+      ],
       createdAt: now,
       updatedAt: now,
     });
@@ -74,11 +78,17 @@ export const update = mutation({
     await requireRole(ctx, args.sessionToken, "admin");
 
     const admin = await ctx.db.get(args.id);
-    if (!admin) throw new Error("Admin not found");
+    if (!admin) {
+      throw new Error("Admin not found");
+    }
 
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
-    if (args.name !== undefined) updates.name = args.name;
-    if (args.permissions !== undefined) updates.permissions = args.permissions;
+    if (args.name !== undefined) {
+      updates.name = args.name;
+    }
+    if (args.permissions !== undefined) {
+      updates.permissions = args.permissions;
+    }
 
     await ctx.db.patch(args.id, updates);
   },
@@ -91,7 +101,9 @@ export const hasPermission = query({
   },
   handler: async (ctx, args) => {
     const admin = await ctx.db.get(args.id);
-    if (!admin) return false;
+    if (!admin) {
+      return false;
+    }
     return admin.permissions.includes(args.permission);
   },
 });

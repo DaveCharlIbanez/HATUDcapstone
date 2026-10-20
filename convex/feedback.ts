@@ -33,7 +33,9 @@ export const getOperatorAverageRating = query({
       .withIndex("by_operatorId", (q) => q.eq("operatorId", args.operatorId))
       .collect();
 
-    if (feedbacks.length === 0) return null;
+    if (feedbacks.length === 0) {
+      return null;
+    }
 
     const total = feedbacks.reduce((sum, f) => sum + f.rating, 0);
     return total / feedbacks.length;
@@ -67,7 +69,9 @@ export const create = mutation({
       .withIndex("by_rideId", (q) => q.eq("rideId", args.rideId))
       .first();
 
-    if (existing) throw new Error("Feedback already exists for this ride");
+    if (existing) {
+      throw new Error("Feedback already exists for this ride");
+    }
 
     return await ctx.db.insert("feedback", {
       rideId: args.rideId,
@@ -89,7 +93,9 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const feedback = await ctx.db.get(args.id);
-    if (!feedback) throw new Error("Feedback not found");
+    if (!feedback) {
+      throw new Error("Feedback not found");
+    }
 
     await requireCommuterOwnership(ctx, args.sessionToken, feedback.commuterId);
 
@@ -98,8 +104,12 @@ export const update = mutation({
     }
 
     const updates: Record<string, unknown> = {};
-    if (args.rating !== undefined) updates.rating = args.rating;
-    if (args.comment !== undefined) updates.comment = args.comment;
+    if (args.rating !== undefined) {
+      updates.rating = args.rating;
+    }
+    if (args.comment !== undefined) {
+      updates.comment = args.comment;
+    }
 
     await ctx.db.patch(args.id, updates);
   },

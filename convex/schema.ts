@@ -11,6 +11,7 @@ export default defineSchema({
       v.literal("operator"),
       v.literal("admin")
     ),
+    theme: v.optional(v.union(v.literal("light"), v.literal("dark"))),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -87,7 +88,13 @@ export default defineSchema({
       longitude: v.number(),
     }),
     vehicleType: v.optional(
-      v.union(v.literal("economy"), v.literal("comfort"), v.literal("xl"))
+      v.union(
+        v.literal("standard"),
+        v.literal("priority"),
+        v.literal("motorcycle_with_pillion"),
+        v.literal("motorcycle_standard"),
+        v.literal("motorcycle_family")
+      )
     ),
     status: v.union(
       v.literal("pending"),
@@ -98,6 +105,20 @@ export default defineSchema({
     ),
     fare: v.number(),
     distance: v.number(),
+    operatorLocation: v.optional(
+      v.object({
+        latitude: v.number(),
+        longitude: v.number(),
+        updatedAt: v.number(),
+      })
+    ),
+    commuterLocation: v.optional(
+      v.object({
+        latitude: v.number(),
+        longitude: v.number(),
+        updatedAt: v.number(),
+      })
+    ),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -132,6 +153,16 @@ export default defineSchema({
     count: v.number(),
     lastAttemptAt: v.number(),
     lockedUntil: v.optional(v.number()),
+  }).index("by_email", ["email"]),
+
+  messages: defineTable({
+    rideId: v.id("rides"),
+    senderId: v.id("users"),
+    senderRole: v.union(v.literal("commuter"), v.literal("operator")),
+    content: v.string(),
+    read: v.boolean(),
+    createdAt: v.number(),
   })
-    .index("by_email", ["email"]),
+    .index("by_rideId", ["rideId"])
+    .index("by_createdAt", ["createdAt"]),
 });

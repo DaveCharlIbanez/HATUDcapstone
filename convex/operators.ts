@@ -143,12 +143,20 @@ export const update = mutation({
     await requireOperatorOwnership(ctx, args.sessionToken, args.id);
 
     const operator = await ctx.db.get(args.id);
-    if (!operator) throw new Error("Operator not found");
+    if (!operator) {
+      throw new Error("Operator not found");
+    }
 
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
-    if (args.name !== undefined) updates.name = args.name;
-    if (args.phone !== undefined) updates.phone = args.phone;
-    if (args.vehicleInfo !== undefined) updates.vehicleInfo = args.vehicleInfo;
+    if (args.name !== undefined) {
+      updates.name = args.name;
+    }
+    if (args.phone !== undefined) {
+      updates.phone = args.phone;
+    }
+    if (args.vehicleInfo !== undefined) {
+      updates.vehicleInfo = args.vehicleInfo;
+    }
 
     await ctx.db.patch(args.id, updates);
   },

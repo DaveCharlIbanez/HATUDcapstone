@@ -10,15 +10,15 @@ import {
 
 type ToastType = "success" | "error" | "info";
 
-type Toast = {
+interface Toast {
   id: number;
   message: string;
   type: ToastType;
-};
+}
 
-type ToastContextType = {
+interface ToastContextType {
   showToast: (message: string, type?: ToastType) => void;
-};
+}
 
 import { createContext, useContext } from "react";
 
@@ -91,9 +91,9 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
       `}
     >
       {icons[toast.type]}
-      <p className="flex-1 text-slate-200 text-sm">{toast.message}</p>
+      <p className="flex-1 text-[var(--foreground)] text-sm">{toast.message}</p>
       <button
-        className="text-slate-400 transition-colors hover:text-slate-200"
+        className="text-[var(--text-muted)] transition-colors hover:text-[var(--foreground)]"
         onClick={() => {
           setIsExiting(true);
           setTimeout(onClose, 300);

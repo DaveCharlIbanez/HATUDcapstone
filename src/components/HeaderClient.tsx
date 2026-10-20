@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "./ThemeToggle";
 
 export default function HeaderClient() {
   const pathname = usePathname();
@@ -27,27 +28,27 @@ export default function HeaderClient() {
 
   const isAdmin = pathname?.startsWith("/admin");
   const isOperator = pathname?.startsWith("/operator");
-  const isCommuter = pathname?.startsWith("/Commuters");
+  const isCommuter = pathname?.startsWith("/Commuters") || pathname === "/map";
 
   return (
-    <header className="sticky top-0 z-50 border-slate-200/70 border-b bg-white/80 shadow-sm backdrop-blur-lg dark:border-slate-800 dark:bg-slate-950/90">
+    <header className="sticky top-0 z-50 border-[var(--border)] border-b bg-[var(--surface-strong)]/80 shadow-sm backdrop-blur-lg">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
         <Link
-          className="font-semibold text-lg text-slate-950 dark:text-slate-100"
+          className="font-semibold text-[var(--foreground)] text-lg"
           href="/"
         >
           Hatud
         </Link>
-        <nav className="flex flex-wrap items-center gap-3 text-slate-600 text-sm dark:text-slate-300">
+        <nav className="flex flex-wrap items-center gap-3 text-[var(--text-muted)] text-sm">
           <Link
-            className="rounded-full px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="rounded-full px-4 py-2 hover:bg-[var(--surface-muted)]"
             href="/"
           >
             Home
           </Link>
           {isAdmin && (
             <Link
-              className="rounded-full px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="rounded-full px-4 py-2 hover:bg-[var(--surface-muted)]"
               href="/admin"
             >
               Admin
@@ -55,7 +56,7 @@ export default function HeaderClient() {
           )}
           {isOperator && (
             <Link
-              className="rounded-full px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="rounded-full px-4 py-2 hover:bg-[var(--surface-muted)]"
               href="/operator"
             >
               Operator
@@ -63,12 +64,13 @@ export default function HeaderClient() {
           )}
           {isCommuter && (
             <Link
-              className="rounded-full px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-              href="/Commuters"
+              className="rounded-full px-4 py-2 hover:bg-[var(--surface-muted)]"
+              href="/map"
             >
               Commuter
             </Link>
           )}
+          <ThemeToggle />
         </nav>
       </div>
     </header>

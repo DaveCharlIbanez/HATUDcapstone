@@ -17,9 +17,13 @@ export default function LoginPage() {
   // Redirect already-authenticated users away from the login page
   useEffect(() => {
     if (user) {
-      router.replace(
-        `/${user.role === "admin" ? "admin" : user.role === "operator" ? "operator" : "Commuters"}`
-      );
+      const targetRoute =
+        user.role === "admin"
+          ? "admin"
+          : user.role === "operator"
+            ? "operator"
+            : "map";
+      router.replace(`/${targetRoute}`);
     }
   }, [user, router]);
 
@@ -39,12 +43,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--background)] p-4">
       <div className="w-full max-w-md">
-        <div className="rounded-[2rem] border border-slate-800 bg-slate-900/90 p-8 shadow-slate-950/50 shadow-xl backdrop-blur">
+        <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)]/90 p-8 shadow-slate-950/50 shadow-xl backdrop-blur">
           <div className="mb-8 text-center">
-            <h1 className="font-bold text-3xl text-slate-50">HATUD</h1>
-            <p className="mt-2 text-slate-400 text-sm">
+            <h1 className="font-bold text-3xl text-[var(--foreground)]">
+              HATUD
+            </h1>
+            <p className="mt-2 text-[var(--text-muted)] text-sm">
               Sign in to your account
             </p>
           </div>
@@ -58,13 +64,13 @@ export default function LoginPage() {
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label
-                className="mb-2 block font-medium text-slate-300 text-sm"
+                className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                 htmlFor="email"
               >
                 Email
               </label>
               <input
-                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                 id="email"
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
@@ -76,13 +82,13 @@ export default function LoginPage() {
 
             <div>
               <label
-                className="mb-2 block font-medium text-slate-300 text-sm"
+                className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                 htmlFor="password"
               >
                 Password
               </label>
               <input
-                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                 id="password"
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
@@ -102,23 +108,23 @@ export default function LoginPage() {
           </form>
 
           <div className="my-6 flex items-center">
-            <div className="h-px flex-grow bg-slate-700" />
-            <span className="px-4 text-slate-500 text-sm">
+            <div className="h-px flex-grow bg-[var(--surface-muted)]" />
+            <span className="px-4 text-[var(--text-muted)] text-sm">
               Or continue with
             </span>
-            <div className="h-px flex-grow bg-slate-700" />
+            <div className="h-px flex-grow bg-[var(--surface-muted)]" />
           </div>
 
           <div className="flex justify-center gap-4">
             <button
-              className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 transition-all hover:scale-105 hover:bg-slate-700"
+              className="flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] transition-all hover:scale-105 hover:bg-[var(--surface-muted)]"
               onClick={() => alert("Social login coming soon.")}
               type="button"
             >
               <FaGoogle className="text-red-400 text-xl" />
             </button>
             <button
-              className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 transition-all hover:scale-105 hover:bg-slate-700"
+              className="flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] transition-all hover:scale-105 hover:bg-[var(--surface-muted)]"
               onClick={() => alert("Social login coming soon.")}
               type="button"
             >
@@ -126,7 +132,7 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <p className="mt-6 text-center text-slate-400 text-sm">
+          <p className="mt-6 text-center text-[var(--text-muted)] text-sm">
             Don&apos;t have an account?{" "}
             <Link
               className="font-medium text-sky-400 transition-colors hover:text-sky-300"
@@ -135,7 +141,6 @@ export default function LoginPage() {
               Sign up
             </Link>
           </p>
-
         </div>
       </div>
     </div>

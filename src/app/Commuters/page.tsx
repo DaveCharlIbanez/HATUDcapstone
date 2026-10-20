@@ -2,14 +2,16 @@
 
 import maplibregl from "maplibre-gl";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { FaClock, FaMapMarkerAlt, FaSignOutAlt, FaUser } from "react-icons/fa";
+import { ChatBubble } from "@/components/ChatBubble";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMutation, useQuery } from "convex/react";
+import { useAuth } from "@/lib/authContext";
+import { getRoute } from "@/lib/mapClient";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { useAuth } from "@/lib/authContext";
 
 interface Vehicle {
   capacity: number;
@@ -32,13 +34,21 @@ const CommutersPage = () => {
   const [dropoffCoords, setDropoffCoords] = useState({ lat: 0, lng: 0 });
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [pickupSuggestions, setPickupSuggestions] = useState<any[]>([]);
-  const [step, setStep] = useState<"location" | "vehicle" | "booking" | "tracking">("location");
+  const [step, setStep] = useState<
+    "location" | "vehicle" | "booking" | "tracking"
+  >("location");
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
   const [rideStatus, setRideStatus] = useState<
-    "searching" | "matched" | "arriving" | "arrived" | "in-progress" | "completed"
+    | "searching"
+    | "matched"
+    | "arriving"
+    | "arrived"
+    | "in-progress"
+    | "completed"
   >("searching");
   const [activeRideId, setActiveRideId] = useState<Id<"rides"> | null>(null);
   const [confirmedRide, setConfirmedRide] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   // Resolve commuter profile from userId
   const commuter = useQuery(
@@ -60,11 +70,36 @@ const CommutersPage = () => {
 
   const createRide = useMutation(api.rides.create);
   const cancelRide = useMutation(api.rides.cancel);
+  const updateCommuterLocationMutation = useMutation(api.rides.updateCommuterLocation);
+
+  const operatorLocation = useQuery(
+    api.rides.getOperatorLocation,
+    activeRide ? { rideId: activeRide._id } : "skip"
+  );
+
+  const operatorMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const routeLayerId = "route-line";
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const locationRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const vehicles: Vehicle[] = [
-    { type: "economy", name: "Hatud Economy", icon: "🚗", eta: "2 min", capacity: 4, price: 50 },
-    { type: "comfort", name: "Hatud Comfort", icon: "🚙", eta: "3 min", capacity: 4, price: 75 },
-    { type: "xl", name: "Hatud XL", icon: "🚐", eta: "5 min", capacity: 6, price: 120 },
+    {
+      type: "standard",
+      name: "Standard",
+      icon: "🏍️",
+      eta: "2 min",
+      capacity: 1,
+      price: 30,
+    },
+    {
+      type: "priority",
+      name: "Priority",
+      icon: "🛵",
+      eta: "3 min",
+      capacity: 2,
+      price: 50,
+    },
   ];
 
   // Map init
@@ -84,7 +119,7 @@ const CommutersPage = () => {
       el.style.borderRadius = "50%";
       el.style.border = "2px solid white";
 
-      new maplibregl.Marker({ element: el })
+      userMarkerRef.current = new maplibregl.Marker({ element: el })
         .setLngLat([122.0175, 10.7883])
         .addTo(map.current);
 
@@ -92,8 +127,11 @@ const CommutersPage = () => {
         navigator.geolocation.getCurrentPosition(
           (position) => {
             const { longitude, latitude } = position.coords;
+            const newLocation = { latitude, longitude };
+            locationRef.current = newLocation;
             setPickupCoords({ lat: latitude, lng: longitude });
             setPickup(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+            setCurrentLocation(newLocation);
             if (map.current) {
               map.current.flyTo({ center: [longitude, latitude], zoom: 14 });
               el.style.display = "block";
@@ -101,21 +139,59 @@ const CommutersPage = () => {
           },
           (error) => console.error("Geolocation error:", error)
         );
+
+        // Watch position for real-time updates
+        navigator.geolocation.watchPosition(
+          (position) => {
+            const { longitude, latitude } = position.coords;
+            const newLocation = { latitude, longitude };
+            locationRef.current = newLocation;
+            setCurrentLocation(newLocation);
+            if (userMarkerRef.current) {
+              userMarkerRef.current.setLngLat([longitude, latitude]);
+            }
+          },
+          (error) => console.error("Geolocation watch error:", error),
+          { enableHighAccuracy: true }
+        );
       }
     }
   }, []);
 
-  // Role guard — redirect non-commuters
+  // Role guard — redirect non-commuters and commuters to map
   useEffect(() => {
-    if (!authLoading && !user) { router.push("/login"); return; }
-    if (!authLoading && user && user.role !== "commuter") {
-      router.push(user.role === "admin" ? "/admin" : "/operator");
+    if (!(authLoading || user)) {
+      router.push("/login");
+      return;
+    }
+    if (!authLoading && user) {
+      if (user.role === "commuter") {
+        router.replace("/map");
+      } else {
+        router.push(user.role === "admin" ? "/admin" : "/operator");
+      }
     }
   }, [user, authLoading, router]);
 
+  const resetBooking = () => {
+    setStep("location");
+    setPickup("");
+    setDropoff("");
+    setPickupCoords({ lat: 0, lng: 0 });
+    setDropoffCoords({ lat: 0, lng: 0 });
+    setPickupSuggestions([]);
+    setSuggestions([]);
+    setSelectedVehicle(null);
+    setRideStatus("searching");
+    setActiveRideId(null);
+    setConfirmedRide(false);
+  };
+
   // React to Convex ride status changes — drives all UI transitions
   useEffect(() => {
-    if (!activeRide) return;
+    if (!activeRide) {
+      return;
+    }
 
     if (activeRide.status === "pending") {
       setStep("booking");
@@ -137,7 +213,151 @@ const CommutersPage = () => {
     } else if (activeRide.status === "cancelled") {
       resetBooking();
     }
-  }, [activeRide?.status, confirmedRide]);
+  }, [activeRide?.status, confirmedRide, resetBooking, activeRide]);
+
+  // Show chat when ride is accepted or in progress
+  useEffect(() => {
+    if (
+      !authLoading &&
+      activeRide &&
+      (activeRide.status === "accepted" ||
+        activeRide.status === "inProgress") &&
+      sessionToken
+    ) {
+      const timer = setTimeout(() => setShowChat(true), 100);
+      return () => clearTimeout(timer);
+    }
+    setShowChat(false);
+  }, [authLoading, activeRide, activeRide?.status, sessionToken]);
+
+  // Send commuter location to Convex every 5 seconds when ride is accepted/inProgress
+  useEffect(() => {
+    if (
+      !activeRide ||
+      (activeRide.status !== "accepted" && activeRide.status !== "inProgress") ||
+      !sessionToken
+    ) {
+      return;
+    }
+
+    const sendLocation = async () => {
+      const loc = locationRef.current;
+      if (!loc) return;
+
+      try {
+        await updateCommuterLocationMutation({
+          sessionToken,
+          rideId: activeRide._id,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+        });
+      } catch (error) {
+        console.error("Failed to update commuter location:", error);
+      }
+    };
+
+    sendLocation();
+    const interval = setInterval(sendLocation, 5000);
+
+    return () => clearInterval(interval);
+  }, [activeRide, sessionToken, updateCommuterLocationMutation]);
+
+  // Display operator marker and route when location is available
+  useEffect(() => {
+    const loc = locationRef.current;
+    if (!map.current || !operatorLocation || !loc) {
+      return;
+    }
+
+    // Remove existing route if any
+    if (map.current.getLayer(routeLayerId)) {
+      map.current.removeLayer(routeLayerId);
+    }
+    if (map.current.getSource("route")) {
+      map.current.removeSource("route");
+    }
+
+    // Add or update operator marker
+    if (!operatorMarkerRef.current) {
+      const operatorEl = document.createElement("div");
+      operatorEl.style.width = "24px";
+      operatorEl.style.height = "24px";
+      operatorEl.style.backgroundColor = "#3B82F6";
+      operatorEl.style.borderRadius = "50%";
+      operatorEl.style.border = "3px solid white";
+      operatorEl.style.boxShadow = "0 0 8px rgba(59, 130, 246, 0.5)";
+      operatorEl.style.display = "flex";
+      operatorEl.style.alignItems = "center";
+      operatorEl.style.justifyContent = "center";
+      operatorEl.style.fontSize = "14px";
+      operatorEl.innerHTML = "🏍️";
+
+      operatorMarkerRef.current = new maplibregl.Marker({ element: operatorEl })
+        .setLngLat([operatorLocation.longitude, operatorLocation.latitude])
+        .addTo(map.current);
+    } else {
+      operatorMarkerRef.current.setLngLat([operatorLocation.longitude, operatorLocation.latitude]);
+    }
+
+    // Check if location is stale (30 seconds)
+    const isStale = Date.now() - operatorLocation.updatedAt > 30000;
+    if (isStale && operatorMarkerRef.current.getElement()) {
+      operatorMarkerRef.current.getElement().style.backgroundColor = "#94a3b8";
+      operatorMarkerRef.current.getElement().style.boxShadow = "0 0 8px rgba(148, 163, 184, 0.5)";
+    }
+
+    // Draw route from commuter to operator
+    const drawRoute = async () => {
+      const route = await getRoute(
+        [loc.longitude, loc.latitude],
+        [operatorLocation.longitude, operatorLocation.latitude]
+      );
+
+      if (route && map.current) {
+        map.current.addSource("route", {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            properties: {},
+            geometry: route,
+          },
+        });
+
+        map.current.addLayer({
+          id: routeLayerId,
+          type: "line",
+          source: "route",
+          layout: {
+            "line-join": "round",
+            "line-cap": "round",
+          },
+          paint: {
+            "line-color": "#3b82f6",
+            "line-width": 4,
+            "line-opacity": 0.7,
+          },
+        });
+      }
+    };
+
+    drawRoute();
+  }, [operatorLocation]);
+
+  // Clear markers when ride ends
+  useEffect(() => {
+    if (!activeRide || (activeRide.status !== "accepted" && activeRide.status !== "inProgress")) {
+      if (operatorMarkerRef.current) {
+        operatorMarkerRef.current.remove();
+        operatorMarkerRef.current = null;
+      }
+      if (map.current?.getLayer(routeLayerId)) {
+        map.current.removeLayer(routeLayerId);
+      }
+      if (map.current?.getSource("route")) {
+        map.current.removeSource("route");
+      }
+    }
+  }, [activeRide]);
 
   const handlePickupSearch = async (query: string) => {
     setPickup(query);
@@ -158,7 +378,10 @@ const CommutersPage = () => {
 
   const handlePickupSelect = (place: any) => {
     setPickup(place.display_name);
-    setPickupCoords({ lat: Number.parseFloat(place.lat), lng: Number.parseFloat(place.lon) });
+    setPickupCoords({
+      lat: Number.parseFloat(place.lat),
+      lng: Number.parseFloat(place.lon),
+    });
     setPickupSuggestions([]);
   };
 
@@ -181,15 +404,22 @@ const CommutersPage = () => {
 
   const handleSelect = (place: any) => {
     setDropoff(place.display_name);
-    setDropoffCoords({ lat: Number.parseFloat(place.lat), lng: Number.parseFloat(place.lon) });
+    setDropoffCoords({
+      lat: Number.parseFloat(place.lat),
+      lng: Number.parseFloat(place.lon),
+    });
     setSuggestions([]);
   };
 
   const handleBookRide = async () => {
-    if (!selectedVehicle || !pickup || !dropoff || !commuter || !sessionToken) return;
+    if (!(selectedVehicle && pickup && dropoff && commuter && sessionToken)) {
+      return;
+    }
 
     const vehicle = vehicles.find((v) => v.type === selectedVehicle);
-    if (!vehicle) return;
+    if (!vehicle) {
+      return;
+    }
 
     setStep("booking");
     setRideStatus("searching");
@@ -208,7 +438,7 @@ const CommutersPage = () => {
           latitude: dropoffCoords.lat,
           longitude: dropoffCoords.lng,
         },
-        vehicleType: selectedVehicle as "economy" | "comfort" | "xl",
+        vehicleType: selectedVehicle as "standard" | "priority",
         fare: vehicle.price,
         distance: 0,
       });
@@ -232,36 +462,22 @@ const CommutersPage = () => {
     resetBooking();
   };
 
-  const resetBooking = () => {
-    setStep("location");
-    setPickup("");
-    setDropoff("");
-    setPickupCoords({ lat: 0, lng: 0 });
-    setDropoffCoords({ lat: 0, lng: 0 });
-    setPickupSuggestions([]);
-    setSuggestions([]);
-    setSelectedVehicle(null);
-    setRideStatus("searching");
-    setActiveRideId(null);
-    setConfirmedRide(false);
-  };
-
   const displayName = commuter?.name ?? user?.name ?? "Loading...";
 
   if (authLoading || !user || user.role !== "commuter") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
-        <p className="text-slate-400">Loading...</p>
+      <div className="flex min-h-screen items-center justify-center bg-[var(--background)] text-[var(--foreground)]">
+        <p className="text-[var(--text-muted)]">Loading...</p>
       </div>
     );
   }
 
   return (
-    <div className="relative h-screen w-full bg-slate-950 text-slate-100">
+    <div className="relative h-screen w-full bg-[var(--background)] text-[var(--foreground)]">
       {/* HEADER */}
       <div className="absolute top-4 left-4 z-20">
-        <div className="flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-900/95 px-4 py-3 shadow-xl backdrop-blur">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-700 text-lg text-sky-300">
+        <div className="flex items-center gap-3 rounded-3xl border border-[var(--border)] bg-[var(--surface)]/95 px-4 py-3 shadow-xl backdrop-blur">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--surface-muted)] text-lg text-sky-300">
             <FaUser />
           </div>
           <div className="min-w-0">
@@ -275,7 +491,7 @@ const CommutersPage = () => {
             Profile
           </Link>
           <button
-            className="inline-flex items-center gap-2 rounded-full bg-rose-500/20 px-3 py-2 font-medium text-sm text-rose-400 transition-colors hover:bg-rose-500/30"
+            className="inline-flex items-center gap-2 rounded-full bg-rose-500/20 px-3 py-2 font-medium text-rose-400 text-sm transition-colors hover:bg-rose-500/30"
             onClick={logout}
           >
             <FaSignOutAlt className="text-xs" />
@@ -289,7 +505,7 @@ const CommutersPage = () => {
 
       {/* BOTTOM PANEL */}
       <div className="pointer-events-none absolute bottom-0 flex w-full justify-center">
-        <div className="pointer-events-auto w-full max-w-md rounded-t-3xl border border-slate-800 bg-slate-950/95 shadow-2xl backdrop-blur-xl">
+        <div className="pointer-events-auto w-full max-w-md rounded-t-3xl border border-[var(--border)] bg-[var(--background)]/95 shadow-2xl backdrop-blur-xl">
           {/* HANDLE */}
           <div className="flex justify-center py-2">
             <div className="h-1.5 w-12 rounded-full bg-gray-300" />
@@ -304,7 +520,7 @@ const CommutersPage = () => {
                   <div className="flex items-center gap-3">
                     <div className="h-3 w-3 shrink-0 rounded-full bg-emerald-400" />
                     <input
-                      className="flex-1 border-slate-300 border-b bg-transparent pb-2 text-slate-100 outline-none placeholder:text-slate-500"
+                      className="flex-1 border-[var(--border)] border-b bg-transparent pb-2 text-[var(--foreground)] outline-none placeholder:text-[var(--text-muted)]"
                       onChange={(e) => handlePickupSearch(e.target.value)}
                       placeholder="Pickup location"
                       value={pickup}
@@ -314,7 +530,7 @@ const CommutersPage = () => {
                   {/* PICKUP SUGGESTIONS */}
                   {pickupSuggestions.map((place, i) => (
                     <button
-                      className="block w-full rounded-2xl border border-slate-800 bg-slate-900/90 p-3 text-left text-slate-100 transition hover:border-slate-700 hover:bg-slate-900"
+                      className="block w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-3 text-left text-[var(--foreground)] transition hover:border-[var(--border)] hover:bg-[var(--surface)]"
                       key={i}
                       onClick={() => handlePickupSelect(place)}
                     >
@@ -328,7 +544,7 @@ const CommutersPage = () => {
                   <div className="flex items-center gap-3">
                     <div className="h-3 w-3 shrink-0 rounded-full bg-rose-400" />
                     <input
-                      className="flex-1 border-slate-300 border-b bg-transparent pb-2 text-slate-100 outline-none placeholder:text-slate-500"
+                      className="flex-1 border-[var(--border)] border-b bg-transparent pb-2 text-[var(--foreground)] outline-none placeholder:text-[var(--text-muted)]"
                       onChange={(e) => handleSearch(e.target.value)}
                       placeholder="Where to?"
                       value={dropoff}
@@ -339,7 +555,7 @@ const CommutersPage = () => {
                 {/* DROPOFF SUGGESTIONS */}
                 {suggestions.map((place, i) => (
                   <button
-                    className="mb-2 block w-full rounded-3xl border border-slate-800 bg-slate-900/90 p-3 text-left text-slate-100 transition hover:border-slate-700 hover:bg-slate-900"
+                    className="mb-2 block w-full rounded-3xl border border-[var(--border)] bg-[var(--surface)]/90 p-3 text-left text-[var(--foreground)] transition hover:border-[var(--border)] hover:bg-[var(--surface)]"
                     key={i}
                     onClick={() => handleSelect(place)}
                   >
@@ -372,24 +588,31 @@ const CommutersPage = () => {
                     <button
                       className={`w-full rounded-3xl border-2 p-4 transition-all ${
                         selectedVehicle === vehicle.type
-                          ? "border-sky-400 bg-slate-900 shadow-lg shadow-sky-400/20"
-                          : "border-slate-700 bg-slate-900/50 hover:border-slate-600"
+                          ? "border-sky-400 bg-[var(--surface)] shadow-lg shadow-sky-400/20"
+                          : "border-slate-700 bg-[var(--surface)]/50 hover:border-slate-600"
                       }`}
                       key={vehicle.type}
                       onClick={() => setSelectedVehicle(vehicle.type)}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="text-3xl text-sky-400">{vehicle.icon}</div>
+                          <div className="text-3xl text-sky-400">
+                            {vehicle.icon}
+                          </div>
                           <div className="text-left">
-                            <div className="font-semibold text-white">{vehicle.name}</div>
-                            <div className="flex items-center gap-2 text-slate-400 text-sm">
-                              <FaClock className="text-xs" /> {vehicle.eta} • {vehicle.capacity} seats
+                            <div className="font-semibold text-white">
+                              {vehicle.name}
+                            </div>
+                            <div className="flex items-center gap-2 text-[var(--text-muted)] text-sm">
+                              <FaClock className="text-xs" /> {vehicle.eta} •{" "}
+                              {vehicle.capacity} passenger(s)
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-bold text-lg text-white">₱{vehicle.price}</div>
+                          <div className="font-bold text-lg text-white">
+                            ₱{vehicle.price}
+                          </div>
                         </div>
                       </div>
                     </button>
@@ -398,12 +621,14 @@ const CommutersPage = () => {
 
                 {/* BOOK BUTTON */}
                 <button
-                  className="mt-2 w-full rounded-3xl bg-sky-500 py-3 font-semibold text-sm text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700"
-                  disabled={!selectedVehicle || !commuter || !sessionToken}
+                  className="mt-2 w-full rounded-3xl bg-sky-500 py-3 font-semibold text-sm text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)]"
+                  disabled={!(selectedVehicle && commuter && sessionToken)}
                   onClick={handleBookRide}
                 >
                   Book{" "}
-                  {selectedVehicle ? vehicles.find((v) => v.type === selectedVehicle)?.name : ""}
+                  {selectedVehicle
+                    ? vehicles.find((v) => v.type === selectedVehicle)?.name
+                    : ""}
                 </button>
               </>
             )}
@@ -414,12 +639,14 @@ const CommutersPage = () => {
                 {rideStatus === "searching" && (
                   <div className="py-8 text-center">
                     <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-sky-400 border-t-transparent" />
-                    <h3 className="mb-2 font-semibold text-lg text-white">Finding your driver</h3>
-                    <p className="mb-6 text-slate-400">
+                    <h3 className="mb-2 font-semibold text-lg text-white">
+                      Finding your driver
+                    </h3>
+                    <p className="mb-6 text-[var(--text-muted)]">
                       Please wait while we match you with the best driver
                     </p>
                     <button
-                      className="w-full rounded-3xl bg-slate-800 py-3 font-semibold text-slate-100 text-sm transition hover:bg-slate-700"
+                      className="w-full rounded-3xl bg-[var(--surface-strong)] py-3 font-semibold text-[var(--foreground)] text-sm transition hover:bg-[var(--surface-muted)]"
                       onClick={handleCancelRide}
                     >
                       Cancel
@@ -433,10 +660,10 @@ const CommutersPage = () => {
                       Driver Assigned!
                     </h3>
 
-                    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+                    <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
                       <div className="mb-4 flex items-center gap-4">
-                        <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-slate-800 text-3xl">
-                          🚗
+                        <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-[var(--surface-strong)] text-3xl">
+                          🏍️
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="font-semibold text-base text-white">
@@ -444,7 +671,7 @@ const CommutersPage = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="space-y-2 border-slate-700 border-t pt-4 text-slate-400 text-sm">
+                      <div className="space-y-2 border-[var(--border)] border-t pt-4 text-[var(--text-muted)] text-sm">
                         <div className="flex justify-between">
                           <span>Vehicle:</span>
                           <span className="font-medium text-white">
@@ -479,8 +706,12 @@ const CommutersPage = () => {
                 {rideStatus === "matched" && !matchedOperator && (
                   <div className="py-8 text-center">
                     <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-sky-400 border-t-transparent" />
-                    <h3 className="mb-2 font-semibold text-lg text-white">Driver found!</h3>
-                    <p className="text-slate-400">Loading driver details...</p>
+                    <h3 className="mb-2 font-semibold text-lg text-white">
+                      Driver found!
+                    </h3>
+                    <p className="text-[var(--text-muted)]">
+                      Loading driver details...
+                    </p>
                   </div>
                 )}
               </>
@@ -497,12 +728,14 @@ const CommutersPage = () => {
                 </h3>
 
                 {matchedOperator && (
-                  <div className="mb-4 rounded-lg border border-slate-800 bg-slate-900 p-4">
+                  <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
                     <div className="flex items-center gap-4">
-                      <div className="text-3xl">🚗</div>
+                      <div className="text-3xl">🏍️</div>
                       <div className="text-left">
-                        <div className="font-medium text-white">{matchedOperator.name}</div>
-                        <div className="text-slate-400 text-sm">
+                        <div className="font-medium text-white">
+                          {matchedOperator.name}
+                        </div>
+                        <div className="text-[var(--text-muted)] text-sm">
                           {matchedOperator.vehicleInfo.model} •{" "}
                           {matchedOperator.vehicleInfo.plateNumber}
                         </div>
@@ -520,7 +753,7 @@ const CommutersPage = () => {
                       Pay &amp; Rate Driver
                     </button>
                     <button
-                      className="w-full rounded-3xl bg-slate-800 py-3 font-semibold text-slate-100 text-sm transition hover:bg-slate-700"
+                      className="w-full rounded-3xl bg-[var(--surface-strong)] py-3 font-semibold text-[var(--foreground)] text-sm transition hover:bg-[var(--surface-muted)]"
                       onClick={resetBooking}
                     >
                       Book Another Ride
@@ -530,6 +763,15 @@ const CommutersPage = () => {
               </div>
             )}
           </div>
+
+          {showChat && activeRide && sessionToken && (
+            <ChatBubble
+              partnerName={matchedOperator?.name ?? "Driver"}
+              partnerRole="operator"
+              rideId={activeRide._id}
+              sessionToken={sessionToken}
+            />
+          )}
         </div>
       </div>
     </div>

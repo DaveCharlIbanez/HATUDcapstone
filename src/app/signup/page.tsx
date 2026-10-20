@@ -95,12 +95,16 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--background)] p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto">
-        <div className="rounded-[2rem] border border-slate-800 bg-slate-900/90 p-8 shadow-slate-950/50 shadow-xl backdrop-blur">
+        <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)]/90 p-8 shadow-slate-950/50 shadow-xl backdrop-blur">
           <div className="mb-8 text-center">
-            <h1 className="font-bold text-3xl text-slate-50">HATUD</h1>
-            <p className="mt-2 text-slate-400 text-sm">Create your account</p>
+            <h1 className="font-bold text-3xl text-[var(--foreground)]">
+              HATUD
+            </h1>
+            <p className="mt-2 text-[var(--text-muted)] text-sm">
+              Create your account
+            </p>
           </div>
 
           {error && (
@@ -112,13 +116,13 @@ export default function SignupPage() {
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label
-                className="mb-2 block font-medium text-slate-300 text-sm"
+                className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                 htmlFor="role"
               >
                 I am a
               </label>
               <select
-                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                 id="role"
                 name="role"
                 onChange={handleChange}
@@ -131,13 +135,13 @@ export default function SignupPage() {
 
             <div>
               <label
-                className="mb-2 block font-medium text-slate-300 text-sm"
+                className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                 htmlFor="name"
               >
                 Full Name
               </label>
               <input
-                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                 id="name"
                 name="name"
                 onChange={handleChange}
@@ -150,13 +154,13 @@ export default function SignupPage() {
 
             <div>
               <label
-                className="mb-2 block font-medium text-slate-300 text-sm"
+                className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                 htmlFor="email"
               >
                 Email
               </label>
               <input
-                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                 id="email"
                 name="email"
                 onChange={handleChange}
@@ -169,13 +173,13 @@ export default function SignupPage() {
 
             <div>
               <label
-                className="mb-2 block font-medium text-slate-300 text-sm"
+                className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                 htmlFor="phone"
               >
                 Phone Number
               </label>
               <input
-                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                 id="phone"
                 name="phone"
                 onChange={handleChange}
@@ -188,13 +192,13 @@ export default function SignupPage() {
 
             <div>
               <label
-                className="mb-2 block font-medium text-slate-300 text-sm"
+                className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                 htmlFor="password"
               >
                 Password
               </label>
               <input
-                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                 id="password"
                 name="password"
                 onChange={handleChange}
@@ -207,13 +211,13 @@ export default function SignupPage() {
 
             <div>
               <label
-                className="mb-2 block font-medium text-slate-300 text-sm"
+                className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                 htmlFor="confirmPassword"
               >
                 Confirm Password
               </label>
               <input
-                className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                 id="confirmPassword"
                 name="confirmPassword"
                 onChange={handleChange}
@@ -225,21 +229,21 @@ export default function SignupPage() {
             </div>
 
             {formData.role === "operator" && (
-              <div className="mt-4 border-slate-700 border-t pt-4">
-                <h3 className="mb-4 font-semibold text-slate-300">
+              <div className="mt-4 border-[var(--border)] border-t pt-4">
+                <h3 className="mb-4 font-semibold text-[var(--foreground)]">
                   Vehicle Information
                 </h3>
 
                 <div className="space-y-4">
                   <div>
                     <label
-                      className="mb-2 block font-medium text-slate-300 text-sm"
+                      className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                       htmlFor="licenseNumber"
                     >
                       License Number
                     </label>
                     <input
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                       id="licenseNumber"
                       name="licenseNumber"
                       onChange={handleChange}
@@ -252,13 +256,13 @@ export default function SignupPage() {
 
                   <div>
                     <label
-                      className="mb-2 block font-medium text-slate-300 text-sm"
+                      className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                       htmlFor="plateNumber"
                     >
                       Plate Number
                     </label>
                     <input
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                       id="plateNumber"
                       name="plateNumber"
                       onChange={handleChange}
@@ -271,13 +275,13 @@ export default function SignupPage() {
 
                   <div>
                     <label
-                      className="mb-2 block font-medium text-slate-300 text-sm"
+                      className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                       htmlFor="model"
                     >
                       Vehicle Model
                     </label>
                     <input
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                       id="model"
                       name="model"
                       onChange={handleChange}
@@ -290,13 +294,13 @@ export default function SignupPage() {
 
                   <div>
                     <label
-                      className="mb-2 block font-medium text-slate-300 text-sm"
+                      className="mb-2 block font-medium text-[var(--foreground)] text-sm"
                       htmlFor="color"
                     >
                       Vehicle Color
                     </label>
                     <input
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-slate-100 transition-colors placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/50 px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                       id="color"
                       name="color"
                       onChange={handleChange}
@@ -318,7 +322,7 @@ export default function SignupPage() {
               {isLoading ? "Creating Account..." : "Create Account"}
             </button>
 
-            <p className="mt-4 text-center text-slate-400 text-sm">
+            <p className="mt-4 text-center text-[var(--text-muted)] text-sm">
               Already have an account?{" "}
               <Link
                 className="font-medium text-sky-400 transition-colors hover:text-sky-300"

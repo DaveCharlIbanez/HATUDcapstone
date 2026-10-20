@@ -5,6 +5,7 @@ import { RouteGuard } from "@/components/RouteGuard";
 import { ToastProvider } from "@/components/Toast";
 import { AuthProvider } from "@/lib/authContext";
 import { ConvexProvider } from "@/lib/convexClient";
+import { ThemeProvider } from "@/lib/themeContext";
 import "./globals.css";
 
 const geist = Geist({
@@ -33,14 +34,16 @@ export default function RootLayout({
       <body className={`${geist.variable} ${geistMono.variable}`}>
         <ConvexProvider>
           <AuthProvider>
-            <ToastProvider>
-              <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors duration-200">
-                <HeaderClient />
-                <main>
-                  <RouteGuard>{children}</RouteGuard>
-                </main>
-              </div>
-            </ToastProvider>
+            <ThemeProvider>
+              <ToastProvider>
+                <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors duration-200">
+                  <HeaderClient />
+                  <main>
+                    <RouteGuard>{children}</RouteGuard>
+                  </main>
+                </div>
+              </ToastProvider>
+            </ThemeProvider>
           </AuthProvider>
         </ConvexProvider>
       </body>
