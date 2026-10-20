@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { quoteFare, quoteForTrip, roadDistanceKm } from "./lib/fare";
 import {
   requireRideAccessOrLegacy,
   requireRoleOrLegacy,
@@ -35,6 +36,16 @@ const rideStatusValidator = v.union(
   v.literal("completed"),
   v.literal("cancelled")
 );
+
+const vehicleTypeValidator = v.union(
+  v.literal("standard"),
+  v.literal("priority")
+);
+
+const coordinateValidator = v.object({
+  latitude: v.number(),
+  longitude: v.number(),
+});
 
 export type ActiveRidePartner =
   | ({ kind: "operator" } & ReturnType<typeof projectOperatorForCounterpart>)
@@ -116,6 +127,28 @@ export const getPartnerLocation = query({
     }
 
     return { commuterLocation: ride.commuterLocation ?? null };
+  },
+});
+
+/**
+ * The price of a trip before it is booked, for every vehicle class. The same
+ * calculation runs again when the ride is created, and that result is what
+ * gets locked in.
+ */
+export const getFareQuote = query({
+  args: {
+    sessionToken: v.string(),
+    pickup: coordinateValidator,
+    dropoff: coordinateValidator,
+  },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx, args.sessionToken);
+    const distanceKm = roadDistanceKm(args.pickup, args.dropoff);
+    return {
+      distanceKm,
+      standard: quoteFare("standard", distanceKm),
+      priority: quoteFare("priority", distanceKm),
+    };
   },
 });
 
@@ -244,22 +277,27 @@ export const create = mutation({
       latitude: v.number(),
       longitude: v.number(),
     }),
-    vehicleType: v.union(v.literal("standard"), v.literal("priority")),
+    vehicleType: vehicleTypeValidator,
+    // Retained only so that builds which predate server-side pricing keep
+    // working. The value is ignored: the fare is always computed here and
+    // locked in at booking time.
     fare: v.optional(v.number()),
     distance: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await requireCommuterOwnership(ctx, args.sessionToken, args.commuterId);
 
+    const quote = quoteForTrip(args.vehicleType, args.pickup, args.dropoff);
     const now = Date.now();
+
     return await ctx.db.insert("rides", {
       commuterId: args.commuterId,
       pickup: args.pickup,
       dropoff: args.dropoff,
       vehicleType: args.vehicleType,
       status: "pending",
-      fare: args.fare ?? 0,
-      distance: args.distance ?? 0,
+      fare: quote.fare,
+      distance: quote.distanceKm,
       createdAt: now,
       updatedAt: now,
     });
@@ -333,6 +371,26 @@ export const accept = mutation({
       throw new Error("Ride is not in pending status");
     }
 
+    const operator = await ctx.db.get(args.operatorId);
+    if (!operator) {
+      throw new Error("Operator not found");
+    }
+
+    // A driver may only hold one live ride at a time.
+    const existing = await ctx.db
+      .query("rides")
+      .withIndex("by_operatorId", (q) => q.eq("operatorId", args.operatorId))
+      .collect();
+    const liveRide = existing.find(
+      (r) => r.status === "accepted" || r.status === "inProgress"
+    );
+    if (liveRide) {
+      throw new Error("You already have an active ride");
+    }
+    if (!operator.isAvailable) {
+      throw new Error("You must be online to accept a ride");
+    }
+
     const now = Date.now();
     await ctx.db.patch(args.id, {
       operatorId: args.operatorId,
@@ -373,10 +431,31 @@ export const cancel = mutation({
       }
     }
 
+    const now = Date.now();
     await ctx.db.patch(args.id, {
       status: "cancelled",
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
+
+    // Release the driver so they can take another job. A driver who still has
+    // another live ride stays unavailable.
+    if (ride.operatorId) {
+      const operatorRides = await ctx.db
+        .query("rides")
+        .withIndex("by_operatorId", (q) => q.eq("operatorId", ride.operatorId))
+        .collect();
+      const stillBusy = operatorRides.some(
+        (r) =>
+          r._id !== args.id &&
+          (r.status === "accepted" || r.status === "inProgress")
+      );
+      if (!stillBusy) {
+        await ctx.db.patch(ride.operatorId, {
+          isAvailable: true,
+          updatedAt: now,
+        });
+      }
+    }
   },
 });
 

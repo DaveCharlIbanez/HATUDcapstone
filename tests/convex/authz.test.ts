@@ -65,8 +65,8 @@ test("a commuter sees only their own active ride and a projected driver", async 
     role: "operator",
   });
 
-  await seedRide(t, commuter.commuterId as never, {
-    operatorId: operator.operatorId as never,
+  await seedRide(t, commuter.commuterId, {
+    operatorId: operator.operatorId,
     status: "accepted",
   });
 
@@ -101,8 +101,8 @@ test("a driver sees a projected passenger, without email or saved addresses", as
     role: "operator",
   });
 
-  await seedRide(t, commuter.commuterId as never, {
-    operatorId: operator.operatorId as never,
+  await seedRide(t, commuter.commuterId, {
+    operatorId: operator.operatorId,
     status: "accepted",
   });
 
@@ -140,8 +140,8 @@ test("a driver cannot read a ride they are not assigned to", async () => {
     role: "operator",
   });
 
-  const rideId = await seedRide(t, commuter.commuterId as never, {
-    operatorId: assigned.operatorId as never,
+  const rideId = await seedRide(t, commuter.commuterId, {
+    operatorId: assigned.operatorId,
     status: "accepted",
   });
 
@@ -168,7 +168,7 @@ test("a commuter cannot read the location of a ride that is not theirs", async (
     role: "commuter",
   });
 
-  const rideId = await seedRide(t, other.commuterId as never);
+  const rideId = await seedRide(t, other.commuterId);
 
   await expect(
     t.query(api.rides.getPartnerLocation, {
@@ -209,8 +209,8 @@ test("the pending-ride list projects the passenger to name and phone only", asyn
     role: "operator",
   });
 
-  await seedRide(t, commuter.commuterId as never, {
-    operatorId: operator.operatorId as never,
+  await seedRide(t, commuter.commuterId, {
+    operatorId: operator.operatorId,
   });
 
   const pending = await t.query(api.rides.listPendingWithCommuter, {
@@ -239,8 +239,8 @@ test("legacy reads never expose saved addresses, licence numbers or phones", asy
     phone: "+639000000016",
     role: "operator",
   });
-  const rideId = await seedRide(t, commuter.commuterId as never, {
-    operatorId: operator.operatorId as never,
+  const rideId = await seedRide(t, commuter.commuterId, {
+    operatorId: operator.operatorId,
     status: "accepted",
   });
 
@@ -261,14 +261,14 @@ test("legacy reads never expose saved addresses, licence numbers or phones", asy
   expect(legacyOperator).not.toHaveProperty("currentLocation");
 
   const legacyById = await t.query(api.operators.getById, {
-    id: operator.operatorId as never,
+    id: operator.operatorId,
   });
   expect(legacyById?.name).toBe("Legacy Operator");
   expect(legacyById).not.toHaveProperty("licenseNumber");
   expect(legacyById).not.toHaveProperty("currentLocation");
 
   const legacyCommuterById = await t.query(api.commuters.getById, {
-    id: commuter.commuterId as never,
+    id: commuter.commuterId,
   });
   expect(legacyCommuterById?.name).toBe("Legacy Commuter");
   expect(legacyCommuterById).not.toHaveProperty("email");
@@ -320,8 +320,8 @@ test("feedback can only be left by the passenger on a completed ride", async () 
     role: "operator",
   });
 
-  const pendingRide = await seedRide(t, commuter.commuterId as never, {
-    operatorId: operator.operatorId as never,
+  const pendingRide = await seedRide(t, commuter.commuterId, {
+    operatorId: operator.operatorId,
     status: "pending",
   });
 
@@ -329,7 +329,7 @@ test("feedback can only be left by the passenger on a completed ride", async () 
     t.mutation(api.feedback.create, {
       sessionToken: commuter.sessionToken,
       rideId: pendingRide,
-      commuterId: commuter.commuterId as never,
+      commuterId: commuter.commuterId,
       rating: 5,
     })
   ).rejects.toThrow("completed");
@@ -356,15 +356,15 @@ test("feedback derives the driver from the ride, not from the client", async () 
     role: "operator",
   });
 
-  const rideId = await seedRide(t, commuter.commuterId as never, {
-    operatorId: operator.operatorId as never,
+  const rideId = await seedRide(t, commuter.commuterId, {
+    operatorId: operator.operatorId,
     status: "completed",
   });
 
   const feedbackId = await t.mutation(api.feedback.create, {
     sessionToken: commuter.sessionToken,
     rideId,
-    commuterId: commuter.commuterId as never,
+    commuterId: commuter.commuterId,
     rating: 4,
   });
 

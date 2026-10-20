@@ -115,7 +115,7 @@ test("requireOperatorOwnership allows the owning operator", async () => {
         await requireOperatorOwnership(
           ctx,
           operator.sessionToken,
-          operator.operatorId as never
+          operator.operatorId
         )
     )
   ).resolves.toBeNull();
@@ -142,7 +142,7 @@ test("requireOperatorOwnership rejects a different operator", async () => {
         await requireOperatorOwnership(
           ctx,
           other.sessionToken,
-          owner.operatorId as never
+          owner.operatorId
         )
     )
   ).rejects.toThrow("Forbidden");
@@ -169,7 +169,7 @@ test("requireOperatorOwnership lets admins bypass ownership", async () => {
         await requireOperatorOwnership(
           ctx,
           admin.sessionToken,
-          operator.operatorId as never
+          operator.operatorId
         )
     )
   ).resolves.toBeNull();
@@ -196,7 +196,7 @@ test("requireCommuterOwnership rejects a different commuter", async () => {
         await requireCommuterOwnership(
           ctx,
           other.sessionToken,
-          owner.commuterId as never
+          owner.commuterId
         )
     )
   ).rejects.toThrow("Forbidden");

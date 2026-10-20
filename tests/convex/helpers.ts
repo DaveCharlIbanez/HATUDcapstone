@@ -54,6 +54,22 @@ const SESSION_TTL_MS = 60 * 60 * 1000;
  */
 export async function seedAccount(
   t: ReturnType<typeof createTest>,
+  options: SeedOptions & { role: "commuter" }
+): Promise<SeededAccount & { commuterId: Id<"commuters"> }>;
+export async function seedAccount(
+  t: ReturnType<typeof createTest>,
+  options: SeedOptions & { role: "operator" }
+): Promise<SeededAccount & { operatorId: Id<"operators"> }>;
+export async function seedAccount(
+  t: ReturnType<typeof createTest>,
+  options: SeedOptions & { role: "admin" }
+): Promise<SeededAccount & { adminId: Id<"admins"> }>;
+export async function seedAccount(
+  t: ReturnType<typeof createTest>,
+  options: SeedOptions
+): Promise<SeededAccount>;
+export async function seedAccount(
+  t: ReturnType<typeof createTest>,
   options: SeedOptions
 ): Promise<SeededAccount> {
   return await t.run(async (ctx) => {

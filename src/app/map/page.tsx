@@ -28,8 +28,9 @@ interface Vehicle {
   eta: string;
   icon: string;
   name: string;
-  price: number;
-  type: string;
+  /** Fallback shown before the server quote arrives. */
+  basePrice: number;
+  type: "standard" | "priority";
 }
 
 const MapPage = () => {
@@ -91,7 +92,7 @@ const MapPage = () => {
       icon: "🏍️",
       eta: "2 min",
       capacity: 1,
-      price: 30,
+      basePrice: 30,
     },
     {
       type: "priority",
@@ -99,9 +100,31 @@ const MapPage = () => {
       icon: "🛵",
       eta: "3 min",
       capacity: 2,
-      price: 50,
+      basePrice: 50,
     },
   ];
+
+  // The fare is priced on the server. Coordinates are only known once both
+  // addresses have been resolved, and the default of 0,0 is not a real point.
+  const hasRoute =
+    pickupCoords.lat !== 0 && dropoffCoords.lat !== 0 && dropoffCoords.lng !== 0;
+
+  const fareQuote = useQuery(
+    api.rides.getFareQuote,
+    sessionToken && hasRoute
+      ? {
+          sessionToken,
+          pickup: {
+            latitude: pickupCoords.lat,
+            longitude: pickupCoords.lng,
+          },
+          dropoff: {
+            latitude: dropoffCoords.lat,
+            longitude: dropoffCoords.lng,
+          },
+        }
+      : "skip"
+  );
 
   useEffect(() => {
     if (map.current) {
@@ -381,9 +404,7 @@ const MapPage = () => {
           latitude: dropoffCoords.lat,
           longitude: dropoffCoords.lng,
         },
-        vehicleType: selectedVehicle as "standard" | "priority",
-        fare: vehicle.price,
-        distance: 0,
+        vehicleType: vehicle.type,
       });
       setActiveRideId(rideId);
     } catch (err) {
@@ -652,7 +673,10 @@ const MapPage = () => {
                         </div>
                         <div className="text-right">
                           <div className="font-bold text-lg text-white">
-                            ₱{vehicle.price}
+                            ₱
+                            {fareQuote
+                              ? fareQuote[vehicle.type].fare
+                              : vehicle.basePrice}
                           </div>
                         </div>
                       </div>
@@ -662,7 +686,9 @@ const MapPage = () => {
 
                 <button
                   className="mt-3 w-full rounded-2xl border-2 border-sky-500/50 bg-sky-600 py-4 font-bold text-base text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)]"
-                  disabled={!(selectedVehicle && commuter && sessionToken)}
+                  disabled={!(
+                    selectedVehicle && commuter && sessionToken && fareQuote
+                  )}
                   onClick={handleBookRide}
                   type="button"
                 >
