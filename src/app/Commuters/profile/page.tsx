@@ -15,6 +15,7 @@ import {
   FaUser,
 } from "react-icons/fa";
 import { ThemeSlider } from "@/components/ThemeSlider";
+import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/authContext";
 import { commuterProfile } from "@/lib/commuterProfile";
 
@@ -40,6 +41,7 @@ interface PaymentMethod {
 export default function ProfilePage() {
   const router = useRouter();
   const { logout, user: authUser, isLoading: authLoading } = useAuth();
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!(authLoading || authUser)) {
@@ -154,6 +156,7 @@ export default function ProfilePage() {
                       : "text-[var(--foreground)] hover:bg-[var(--surface-strong)]"
                   }`}
                   onClick={() => setActiveTab("profile")}
+                  type="button"
                 >
                   <FaUser className="text-lg" />
                   Profile
@@ -165,6 +168,7 @@ export default function ProfilePage() {
                       : "text-[var(--foreground)] hover:bg-[var(--surface-strong)]"
                   }`}
                   onClick={() => setActiveTab("history")}
+                  type="button"
                 >
                   <FaHistory className="text-lg" />
                   Ride History
@@ -176,6 +180,7 @@ export default function ProfilePage() {
                       : "text-[var(--foreground)] hover:bg-[var(--surface-strong)]"
                   }`}
                   onClick={() => setActiveTab("payment")}
+                  type="button"
                 >
                   <FaCreditCard className="text-lg" />
                   Payment
@@ -187,6 +192,7 @@ export default function ProfilePage() {
                       : "text-[var(--foreground)] hover:bg-[var(--surface-strong)]"
                   }`}
                   onClick={() => setActiveTab("settings")}
+                  type="button"
                 >
                   <FaCog className="text-lg" />
                   Settings
@@ -217,6 +223,7 @@ export default function ProfilePage() {
                     <button
                       className="flex items-center gap-2 rounded-xl bg-sky-500 px-5 py-2.5 font-semibold text-sm text-white transition-colors hover:bg-sky-400"
                       onClick={() => setIsEditing(true)}
+                      type="button"
                     >
                       <FaEdit />
                       Edit Profile
@@ -233,7 +240,10 @@ export default function ProfilePage() {
                     <button
                       className="text-sky-400 text-sm transition-colors hover:text-sky-300"
                       onClick={() =>
-                        alert("Change photo feature is coming soon.")
+                        showToast(
+                          "Change photo feature is coming soon.",
+                          "info"
+                        )
                       }
                       type="button"
                     >
@@ -245,12 +255,16 @@ export default function ProfilePage() {
                   <div className="flex-1 space-y-5">
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       <div>
-                        <label className="mb-2 block font-semibold text-[var(--foreground)] text-sm">
+                        <label
+                          className="mb-2 block font-semibold text-[var(--foreground)] text-sm"
+                          htmlFor="name"
+                        >
                           Full Name
                         </label>
                         {isEditing ? (
                           <input
                             className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)]/80 px-4 py-2.5 text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                            id="name"
                             onChange={(e) =>
                               setEditForm({ ...editForm, name: e.target.value })
                             }
@@ -264,7 +278,10 @@ export default function ProfilePage() {
                         )}
                       </div>
                       <div>
-                        <label className="mb-2 block font-semibold text-[var(--foreground)] text-sm">
+                        <label
+                          className="mb-2 block font-semibold text-[var(--foreground)] text-sm"
+                          htmlFor="email"
+                        >
                           Email
                         </label>
                         {isEditing ? (
@@ -286,7 +303,10 @@ export default function ProfilePage() {
                         )}
                       </div>
                       <div>
-                        <label className="mb-2 block font-semibold text-[var(--foreground)] text-sm">
+                        <label
+                          className="mb-2 block font-semibold text-[var(--foreground)] text-sm"
+                          htmlFor="phone"
+                        >
                           Phone
                         </label>
                         {isEditing ? (
@@ -308,9 +328,9 @@ export default function ProfilePage() {
                         )}
                       </div>
                       <div>
-                        <label className="mb-2 block font-semibold text-[var(--foreground)] text-sm">
+                        <p className="mb-2 block font-semibold text-[var(--foreground)] text-sm">
                           Member Since
-                        </label>
+                        </p>
                         <p className="text-[var(--foreground)]">Jan 2024</p>
                       </div>
                     </div>
@@ -320,12 +340,14 @@ export default function ProfilePage() {
                         <button
                           className="flex-1 rounded-xl bg-sky-500 px-5 py-2.5 font-semibold text-white transition-colors hover:bg-sky-400"
                           onClick={handleSaveProfile}
+                          type="button"
                         >
                           Save Changes
                         </button>
                         <button
                           className="flex-1 rounded-xl border border-[var(--border)] px-5 py-2.5 font-semibold text-[var(--foreground)] transition-colors hover:bg-[var(--surface-strong)]"
                           onClick={handleCancelEdit}
+                          type="button"
                         >
                           Cancel
                         </button>
@@ -387,10 +409,14 @@ export default function ProfilePage() {
                           <span className="text-[var(--text-muted)] text-sm">
                             Rating:
                           </span>
-                          {[...new Array(5)].map((_, i) => (
+                          {[1, 2, 3, 4, 5].map((star) => (
                             <FaStar
-                              className={`text-sm ${i < ride.rating! ? "text-amber-400" : "text-[var(--text-muted)]"}`}
-                              key={i}
+                              className={`text-sm ${
+                                star <= (ride.rating ?? 0)
+                                  ? "text-amber-400"
+                                  : "text-[var(--text-muted)]"
+                              }`}
+                              key={star}
                             />
                           ))}
                         </div>
@@ -410,7 +436,10 @@ export default function ProfilePage() {
                   </h2>
                   <button
                     className="rounded-xl bg-sky-500 px-4 py-2.5 font-semibold text-sm text-white transition-colors hover:bg-sky-400"
-                    onClick={() => alert("Payment methods coming soon.")}
+                    onClick={() =>
+                      showToast("Payment methods coming soon.", "info")
+                    }
+                    type="button"
                   >
                     + Add Method
                   </button>
@@ -448,7 +477,10 @@ export default function ProfilePage() {
                         {!method.isDefault && (
                           <button
                             className="rounded-lg px-3 py-1 text-sky-400 text-sm transition-colors hover:bg-sky-500/10"
-                            onClick={() => alert("Set as default coming soon.")}
+                            onClick={() =>
+                              showToast("Set as default coming soon.", "info")
+                            }
+                            type="button"
                           >
                             Set Default
                           </button>
@@ -456,8 +488,12 @@ export default function ProfilePage() {
                         <button
                           className="rounded-lg px-3 py-1 text-rose-400 text-sm transition-colors hover:bg-rose-500/10"
                           onClick={() =>
-                            alert("Remove payment method coming soon.")
+                            showToast(
+                              "Remove payment method coming soon.",
+                              "info"
+                            )
                           }
+                          type="button"
                         >
                           Remove
                         </button>
@@ -521,26 +557,39 @@ export default function ProfilePage() {
                     <button
                       className="w-full rounded-lg px-4 py-3 text-left font-medium text-rose-400 transition-colors hover:bg-rose-500/10"
                       onClick={() =>
-                        alert("Account deletion: please contact support.")
+                        showToast(
+                          "Account deletion: please contact support.",
+                          "error"
+                        )
                       }
+                      type="button"
                     >
                       Delete Account
                     </button>
                     <button
                       className="w-full rounded-lg px-4 py-3 text-left text-[var(--foreground)] transition-colors hover:bg-[var(--surface-strong)]"
-                      onClick={() => alert("Privacy policy coming soon.")}
+                      onClick={() =>
+                        showToast("Privacy policy coming soon.", "info")
+                      }
+                      type="button"
                     >
                       Privacy Policy
                     </button>
                     <button
                       className="w-full rounded-lg px-4 py-3 text-left text-[var(--foreground)] transition-colors hover:bg-[var(--surface-strong)]"
-                      onClick={() => alert("Terms of service coming soon.")}
+                      onClick={() =>
+                        showToast("Terms of service coming soon.", "info")
+                      }
+                      type="button"
                     >
                       Terms of Service
                     </button>
                     <button
                       className="w-full rounded-lg px-4 py-3 text-left text-[var(--foreground)] transition-colors hover:bg-[var(--surface-strong)]"
-                      onClick={() => alert("Help & Support coming soon.")}
+                      onClick={() =>
+                        showToast("Help & Support coming soon.", "info")
+                      }
+                      type="button"
                     >
                       Help &amp; Support
                     </button>

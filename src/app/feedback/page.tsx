@@ -1,39 +1,61 @@
 "use client";
 
+import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FaStar } from "react-icons/fa";
 import { useToast } from "@/components/Toast";
+import { useAuth } from "@/lib/authContext";
+import { api } from "../../../convex/_generated/api";
+
+const REASONS = [
+  "Clean vehicle",
+  "Safe driving",
+  "Friendly driver",
+  "On time pickup",
+  "Good conversation",
+  "Helpful with luggage",
+];
+
+const RATING_LABELS: Record<number, string> = {
+  1: "Poor",
+  2: "Fair",
+  3: "Good",
+  4: "Very Good",
+  5: "Excellent",
+};
 
 export default function FeedbackPage() {
+  const { sessionToken } = useAuth();
+  const { showToast } = useToast();
+  const router = useRouter();
+
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [feedback, setFeedback] = useState("");
   const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
-  const [tip, setTip] = useState<number | null>(null);
-  const router = useRouter();
-  const { showToast } = useToast();
+  const [submitting, setSubmitting] = useState(false);
 
-  const reasons = [
-    "Clean vehicle",
-    "Safe driving",
-    "Friendly driver",
-    "On time pickup",
-    "Good conversation",
-    "Helpful with luggage",
-  ];
+  const ride = useQuery(
+    api.rides.getLatestCompletedForMe,
+    sessionToken ? { sessionToken } : "skip"
+  );
 
-  const driver = {
-    name: "Juan Dela Cruz",
-    photo: "👨‍🚗",
-    vehicle: "Toyota Vios",
-    rating: 4.8,
-  };
+  const driver = useQuery(
+    api.operators.getForRide,
+    sessionToken && ride?.operatorId
+      ? { sessionToken, rideId: ride._id }
+      : "skip"
+  );
 
-  const handleSubmitFeedback = () => {
-    showToast("Thank you for your feedback!", "success");
-    setTimeout(() => router.push("/Commuters"), 1000);
-  };
+  const driverRating = useQuery(
+    api.feedback.getAverageForOperator,
+    sessionToken && ride?.operatorId
+      ? { sessionToken, operatorId: ride.operatorId }
+      : "skip"
+  );
+
+  const createFeedback = useMutation(api.feedback.create);
 
   const toggleReason = (reason: string) => {
     setSelectedReasons((prev) =>
@@ -42,6 +64,37 @@ export default function FeedbackPage() {
         : [...prev, reason]
     );
   };
+
+  const handleSubmitFeedback = async () => {
+    if (!(ride && sessionToken) || rating === 0) {
+      return;
+    }
+    setSubmitting(true);
+
+    const comment = [selectedReasons.join(", "), feedback.trim()]
+      .filter((part) => part.length > 0)
+      .join(" — ");
+
+    try {
+      await createFeedback({
+        sessionToken,
+        rideId: ride._id,
+        commuterId: ride.commuterId,
+        rating,
+        ...(comment.length > 0 ? { comment } : {}),
+      });
+      showToast("Thank you for your feedback!", "success");
+      router.push("/map");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Could not submit feedback.",
+        "error"
+      );
+      setSubmitting(false);
+    }
+  };
+
+  const stars = [1, 2, 3, 4, 5];
 
   return (
     <div className="min-h-screen bg-[var(--background)] p-4">
@@ -55,18 +108,19 @@ export default function FeedbackPage() {
           </div>
 
           <div className="mb-6 flex items-center gap-4 rounded-xl border border-[var(--border)] bg-[var(--background)]/50 p-4">
-            <div className="text-4xl">{driver.photo}</div>
+            <div className="text-4xl">🛵</div>
             <div className="flex-1">
               <div className="font-semibold text-[var(--foreground)]">
-                {driver.name}
+                {driver?.name ?? "Your driver"}
               </div>
               <div className="text-[var(--text-muted)] text-sm">
-                {driver.vehicle}
+                {driver?.vehicleInfo.model ?? "—"} •{" "}
+                {driver?.vehicleInfo.plateNumber ?? "—"}
               </div>
               <div className="mt-1 flex items-center gap-1">
                 <FaStar className="text-sm text-yellow-400" />
                 <span className="text-[var(--foreground)] text-sm">
-                  {driver.rating}
+                  {driverRating?.average ?? "New"}
                 </span>
               </div>
             </div>
@@ -77,13 +131,15 @@ export default function FeedbackPage() {
               Rate your driver
             </h3>
             <div className="mb-4 flex justify-center gap-2">
-              {[1, 2, 3, 4, 5].map((star) => (
+              {stars.map((star) => (
                 <button
+                  aria-label={`Rate ${star} out of 5`}
                   className="text-3xl transition-colors hover:scale-110"
                   key={star}
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHoverRating(star)}
                   onMouseLeave={() => setHoverRating(0)}
+                  type="button"
                 >
                   <FaStar
                     className={
@@ -96,11 +152,7 @@ export default function FeedbackPage() {
               ))}
             </div>
             <div className="text-center text-[var(--text-muted)] text-sm">
-              {rating === 1 && "Poor"}
-              {rating === 2 && "Fair"}
-              {rating === 3 && "Good"}
-              {rating === 4 && "Very Good"}
-              {rating === 5 && "Excellent"}
+              {RATING_LABELS[hoverRating || rating] ?? "Tap a star to rate"}
             </div>
           </div>
 
@@ -109,8 +161,9 @@ export default function FeedbackPage() {
               What went well?
             </h3>
             <div className="grid grid-cols-2 gap-2">
-              {reasons.map((reason) => (
+              {REASONS.map((reason) => (
                 <button
+                  aria-pressed={selectedReasons.includes(reason)}
                   className={`rounded-lg border p-3 text-sm transition-all ${
                     selectedReasons.includes(reason)
                       ? "border-sky-500 bg-sky-500/10 text-sky-400"
@@ -118,6 +171,7 @@ export default function FeedbackPage() {
                   }`}
                   key={reason}
                   onClick={() => toggleReason(reason)}
+                  type="button"
                 >
                   {reason}
                 </button>
@@ -131,55 +185,26 @@ export default function FeedbackPage() {
             </h3>
             <textarea
               className="w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[var(--foreground)] transition-colors placeholder:text-[var(--text-muted)] focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
-              onChange={(e) => setFeedback(e.target.value)}
+              onChange={(event) => setFeedback(event.target.value)}
               placeholder="Tell us more about your experience..."
               rows={3}
               value={feedback}
             />
           </div>
 
-          <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--background)]/50 p-4">
-            <h3 className="mb-3 font-semibold text-[var(--foreground)] text-lg">
-              Tip Your Driver
-            </h3>
-            <div className="flex gap-2">
-              {[10, 20, 50, 100].map((amount) => (
-                <button
-                  className={`flex-1 rounded-lg border px-4 py-2 text-sm transition-colors ${
-                    tip === amount
-                      ? "border-sky-500 bg-sky-500/20 text-sky-400"
-                      : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--border)]"
-                  }`}
-                  key={amount}
-                  onClick={() => setTip(amount)}
-                  type="button"
-                >
-                  ₱{amount}
-                </button>
-              ))}
-            </div>
-            <div className="mt-3 text-center">
-              <button
-                className="text-sky-400 text-sm transition-colors hover:text-sky-300"
-                onClick={() => setTip(null)}
-                type="button"
-              >
-                No tip
-              </button>
-            </div>
-          </div>
-
           <button
             className="w-full rounded-xl bg-sky-500 py-4 font-semibold text-white shadow-lg shadow-sky-500/20 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={rating === 0}
+            disabled={rating === 0 || submitting || !ride}
             onClick={handleSubmitFeedback}
+            type="button"
           >
-            Submit Feedback
+            {submitting ? "Submitting…" : "Submit Feedback"}
           </button>
 
           <button
             className="mt-3 w-full py-2 text-[var(--text-muted)] text-sm transition-colors hover:text-[var(--foreground)]"
-            onClick={() => router.push("/Commuters")}
+            onClick={() => router.push("/map")}
+            type="button"
           >
             Skip for now
           </button>

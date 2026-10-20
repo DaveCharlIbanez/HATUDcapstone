@@ -3,6 +3,16 @@
 import Link from "next/link";
 import { useAuth } from "@/lib/authContext";
 
+function dashboardForRole(role: string): string {
+  if (role === "admin") {
+    return "admin";
+  }
+  if (role === "operator") {
+    return "operator";
+  }
+  return "map";
+}
+
 export default function Home() {
   const { user } = useAuth();
 
@@ -45,7 +55,7 @@ export default function Home() {
                   </p>
                   <Link
                     className="mt-2 inline-flex items-center justify-center rounded-full bg-[var(--accent)]/20 px-4 py-2 font-medium text-[var(--accent)] text-sm transition hover:bg-[var(--accent)]/30"
-                    href={`/${user.role === "admin" ? "admin" : user.role === "operator" ? "operator" : "Commuters"}`}
+                    href={`/${dashboardForRole(user.role)}`}
                   >
                     Go to Dashboard
                   </Link>

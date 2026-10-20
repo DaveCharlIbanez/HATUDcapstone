@@ -2,7 +2,7 @@
 
 import maplibregl from "maplibre-gl";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
@@ -13,9 +13,11 @@ import {
   FaPhone,
 } from "react-icons/fa";
 import { ChatBubble } from "@/components/ChatBubble";
+import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/authContext";
-import { useTheme } from "@/lib/themeContext";
 import { getRoute } from "@/lib/mapClient";
+import { createMarkerElement } from "@/lib/mapMarkers";
+import { useTheme } from "@/lib/themeContext";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
@@ -26,6 +28,7 @@ export default function OperatorMapPage() {
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
 
   const { user, sessionToken, isLoading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const { theme } = useTheme();
   const router = useRouter();
 
@@ -48,7 +51,9 @@ export default function OperatorMapPage() {
   const acceptRideMutation = useMutation(api.rides.accept);
   const updateRideStatusMutation = useMutation(api.rides.updateStatus);
   const completeRideMutation = useMutation(api.rides.complete);
-  const updateOperatorLocationMutation = useMutation(api.rides.updateOperatorLocation);
+  const updateOperatorLocationMutation = useMutation(
+    api.rides.updateOperatorLocation
+  );
 
   const partnerLocation = useQuery(
     api.rides.getPartnerLocation,
@@ -63,8 +68,13 @@ export default function OperatorMapPage() {
 
   const commuterMarkerRef = useRef<maplibregl.Marker | null>(null);
   const routeLayerId = "route-line";
-  const locationRef = useRef<{ latitude: number; longitude: number } | null>(null);
-  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const locationRef = useRef<{ latitude: number; longitude: number } | null>(
+    null
+  );
+  const [_currentLocation, setCurrentLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   type PendingRide = NonNullable<typeof pendingRides>[number];
   const [selectedRide, setSelectedRide] = useState<PendingRide | null>(null);
@@ -119,9 +129,10 @@ export default function OperatorMapPage() {
       return;
     }
 
-    const mapStyle = theme === "dark"
-      ? "https://tiles.openfreemap.org/styles/dark"
-      : "https://tiles.openfreemap.org/styles/bright";
+    const mapStyle =
+      theme === "dark"
+        ? "https://tiles.openfreemap.org/styles/dark"
+        : "https://tiles.openfreemap.org/styles/bright";
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: mapStyle,
@@ -160,13 +171,14 @@ export default function OperatorMapPage() {
         { enableHighAccuracy: true }
       );
     }
-  }, []);
+  }, [theme]);
 
   // Send operator location to Convex every 5 seconds when ride is accepted/inProgress
   useEffect(() => {
     if (
       !activeRide ||
-      (activeRide.status !== "accepted" && activeRide.status !== "inProgress") ||
+      (activeRide.status !== "accepted" &&
+        activeRide.status !== "inProgress") ||
       !sessionToken
     ) {
       return;
@@ -174,7 +186,9 @@ export default function OperatorMapPage() {
 
     const sendLocation = async () => {
       const loc = locationRef.current;
-      if (!loc) return;
+      if (!loc) {
+        return;
+      }
 
       try {
         await updateOperatorLocationMutation({
@@ -197,7 +211,7 @@ export default function OperatorMapPage() {
   // Display commuter marker and route when location is available
   useEffect(() => {
     const loc = locationRef.current;
-    if (!map.current || !commuterLocation || !loc) {
+    if (!(map.current && commuterLocation && loc)) {
       return;
     }
 
@@ -210,7 +224,12 @@ export default function OperatorMapPage() {
     }
 
     // Add or update commuter marker
-    if (!commuterMarkerRef.current) {
+    if (commuterMarkerRef.current) {
+      commuterMarkerRef.current.setLngLat([
+        commuterLocation.longitude,
+        commuterLocation.latitude,
+      ]);
+    } else {
       const commuterEl = document.createElement("div");
       commuterEl.style.width = "24px";
       commuterEl.style.height = "24px";
@@ -227,15 +246,14 @@ export default function OperatorMapPage() {
       commuterMarkerRef.current = new maplibregl.Marker({ element: commuterEl })
         .setLngLat([commuterLocation.longitude, commuterLocation.latitude])
         .addTo(map.current);
-    } else {
-      commuterMarkerRef.current.setLngLat([commuterLocation.longitude, commuterLocation.latitude]);
     }
 
     // Check if location is stale (30 seconds)
-    const isStale = Date.now() - commuterLocation.updatedAt > 30000;
+    const isStale = Date.now() - commuterLocation.updatedAt > 30_000;
     if (isStale && commuterMarkerRef.current.getElement()) {
       commuterMarkerRef.current.getElement().style.backgroundColor = "#94a3b8";
-      commuterMarkerRef.current.getElement().style.boxShadow = "0 0 8px rgba(148, 163, 184, 0.5)";
+      commuterMarkerRef.current.getElement().style.boxShadow =
+        "0 0 8px rgba(148, 163, 184, 0.5)";
     }
 
     // Draw route from operator to commuter
@@ -277,7 +295,10 @@ export default function OperatorMapPage() {
 
   // Clear markers when ride ends
   useEffect(() => {
-    if (!activeRide || (activeRide.status !== "accepted" && activeRide.status !== "inProgress")) {
+    if (
+      !activeRide ||
+      (activeRide.status !== "accepted" && activeRide.status !== "inProgress")
+    ) {
       if (commuterMarkerRef.current) {
         commuterMarkerRef.current.remove();
         commuterMarkerRef.current = null;
@@ -291,56 +312,36 @@ export default function OperatorMapPage() {
     }
   }, [activeRide]);
 
-  const addCommuterMarkers = (rides: NonNullable<typeof pendingRides>) => {
-    if (!map.current) {
-      return;
-    }
+  const addCommuterMarkers = useCallback(
+    (rides: NonNullable<typeof pendingRides>) => {
+      const mapInstance = map.current;
+      if (!mapInstance) {
+        return;
+      }
 
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current.clear();
+      for (const marker of markersRef.current.values()) {
+        marker.remove();
+      }
+      markersRef.current.clear();
 
-    rides.forEach((ride) => {
-      const pickupEl = document.createElement("div");
-      pickupEl.style.width = "30px";
-      pickupEl.style.height = "30px";
-      pickupEl.style.backgroundColor = "#10B981";
-      pickupEl.style.borderRadius = "50%";
-      pickupEl.style.border = "3px solid white";
-      pickupEl.style.boxShadow = "0 0 8px rgba(16, 185, 129, 0.5)";
-      pickupEl.style.cursor = "pointer";
-      pickupEl.style.display = "flex";
-      pickupEl.style.alignItems = "center";
-      pickupEl.style.justifyContent = "center";
-      pickupEl.style.fontSize = "16px";
-      pickupEl.innerHTML = "📍";
+      for (const ride of rides) {
+        const pickupEl = createMarkerElement("#10B981", "📍");
+        const pickupMarker = new maplibregl.Marker({ element: pickupEl })
+          .setLngLat([ride.pickup.longitude, ride.pickup.latitude])
+          .addTo(mapInstance);
+        pickupEl.addEventListener("click", () => setSelectedRide(ride));
+        markersRef.current.set(`pickup-${ride._id}`, pickupMarker);
 
-      const pickupMarker = new maplibregl.Marker({ element: pickupEl })
-        .setLngLat([ride.pickup.longitude, ride.pickup.latitude])
-        .addTo(map.current!);
-      pickupEl.addEventListener("click", () => setSelectedRide(ride));
-      markersRef.current.set(`pickup-${ride._id}`, pickupMarker);
-
-      const dropoffEl = document.createElement("div");
-      dropoffEl.style.width = "30px";
-      dropoffEl.style.height = "30px";
-      dropoffEl.style.backgroundColor = "#EF4444";
-      dropoffEl.style.borderRadius = "50%";
-      dropoffEl.style.border = "3px solid white";
-      dropoffEl.style.boxShadow = "0 0 8px rgba(239, 68, 68, 0.5)";
-      dropoffEl.style.cursor = "pointer";
-      dropoffEl.style.display = "flex";
-      dropoffEl.style.alignItems = "center";
-      dropoffEl.style.justifyContent = "center";
-      dropoffEl.style.fontSize = "16px";
-      dropoffEl.innerHTML = "📌";
-
-      const dropoffMarker = new maplibregl.Marker({ element: dropoffEl })
-        .setLngLat([ride.dropoff.longitude, ride.dropoff.latitude])
-        .addTo(map.current!);
-      dropoffEl.addEventListener("click", () => setSelectedRide(ride));
-      markersRef.current.set(`dropoff-${ride._id}`, dropoffMarker);
-    });
-  };
+        const dropoffEl = createMarkerElement("#EF4444", "📌");
+        const dropoffMarker = new maplibregl.Marker({ element: dropoffEl })
+          .setLngLat([ride.dropoff.longitude, ride.dropoff.latitude])
+          .addTo(mapInstance);
+        dropoffEl.addEventListener("click", () => setSelectedRide(ride));
+        markersRef.current.set(`dropoff-${ride._id}`, dropoffMarker);
+      }
+    },
+    []
+  );
 
   // Update markers when pending rides change
   useEffect(() => {
@@ -361,7 +362,7 @@ export default function OperatorMapPage() {
       });
       setSelectedRide(null);
     } catch {
-      alert("This ride was already accepted by another driver.");
+      showToast("This ride was already accepted by another driver.", "error");
     }
   };
 
@@ -415,6 +416,7 @@ export default function OperatorMapPage() {
         <button
           className="rounded-lg bg-sky-600 px-2 py-1 text-[10px] text-white md:px-3 md:py-1 md:text-xs"
           onClick={() => setShowChat((prev) => !prev)}
+          type="button"
         >
           Chat {showChat ? "ON" : "OFF"}
         </button>
@@ -454,6 +456,7 @@ export default function OperatorMapPage() {
                 }`}
                 key={ride._id}
                 onClick={() => setSelectedRide(ride)}
+                type="button"
               >
                 <div className="mb-1 flex items-start justify-between md:mb-2">
                   <div>
@@ -520,6 +523,7 @@ export default function OperatorMapPage() {
                       selectedRide.commuter?.phone &&
                       handleCall(selectedRide.commuter.phone)
                     }
+                    type="button"
                   >
                     <FaPhone className="text-[10px] md:text-sm" />
                     <span className="hidden md:inline">Call</span>
@@ -582,6 +586,7 @@ export default function OperatorMapPage() {
                 className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-green-600 px-3 py-2.5 font-semibold text-sm text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)] md:gap-2 md:rounded-2xl md:px-4 md:py-3 md:text-base"
                 disabled={!operatorProfile}
                 onClick={() => handleAcceptRide(selectedRide._id)}
+                type="button"
               >
                 <FaCheckCircle className="text-sm md:text-base" />
                 Accept
@@ -594,6 +599,7 @@ export default function OperatorMapPage() {
                     selectedRide.pickup.longitude
                   )
                 }
+                type="button"
               >
                 <FaMapMarkerAlt className="mr-1.5 inline text-xs md:mr-2 md:text-sm" />
                 Navigate
@@ -601,6 +607,7 @@ export default function OperatorMapPage() {
               <button
                 className="w-full rounded-xl border border-[var(--border)] py-1.5 text-[var(--text-muted)] text-xs transition hover:text-[var(--foreground)] md:rounded-2xl md:py-2 md:text-sm"
                 onClick={() => setSelectedRide(null)}
+                type="button"
               >
                 Close
               </button>
@@ -643,6 +650,7 @@ export default function OperatorMapPage() {
                   <button
                     className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-sky-600 px-2 py-1.5 text-white text-xs transition hover:bg-sky-500 md:gap-2 md:px-3 md:py-2.5 md:text-sm"
                     onClick={() => handleCall(activeRideCommuter.phone)}
+                    type="button"
                   >
                     <FaPhone className="text-[10px] md:text-xs" />
                     Call
@@ -655,6 +663,7 @@ export default function OperatorMapPage() {
                       ? handlePickedUp
                       : handleCompleteRide
                   }
+                  type="button"
                 >
                   {activeRide.status === "accepted" ? "Picked Up" : "Complete"}
                 </button>

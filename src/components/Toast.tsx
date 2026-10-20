@@ -98,6 +98,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
           setIsExiting(true);
           setTimeout(onClose, 300);
         }}
+        type="button"
       >
         <FaTimes className="text-sm" />
       </button>

@@ -2,7 +2,7 @@
 
 import maplibregl from "maplibre-gl";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
@@ -14,11 +14,35 @@ import {
   FaToggleOn,
   FaUserTie,
 } from "react-icons/fa";
-import { useAuth } from "@/lib/authContext";
-import { useTheme } from "@/lib/themeContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useToast } from "@/components/Toast";
+import { useAuth } from "@/lib/authContext";
+import { createMarkerElement } from "@/lib/mapMarkers";
+import { useTheme } from "@/lib/themeContext";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+
+function onlineToggleClass(theme: string): string {
+  return theme === "light"
+    ? "border-emerald-500 bg-emerald-500 text-white"
+    : "border-emerald-400 bg-emerald-600 text-white";
+}
+
+function offlineToggleClass(theme: string): string {
+  return theme === "light"
+    ? "border-slate-400 bg-slate-200 text-slate-700"
+    : "border-slate-400 bg-slate-700 text-slate-200";
+}
+
+function rideStatusBadgeClass(status: string): string {
+  if (status === "accepted") {
+    return "bg-blue-500/20 text-blue-400";
+  }
+  if (status === "inProgress") {
+    return "bg-yellow-500/20 text-yellow-400";
+  }
+  return "bg-green-500/20 text-green-400";
+}
 
 export default function DriverPage() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -26,6 +50,7 @@ export default function DriverPage() {
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const { user, logout, sessionToken, isLoading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const { theme } = useTheme();
   const router = useRouter();
 
@@ -86,9 +111,10 @@ export default function DriverPage() {
   // Map init
   useEffect(() => {
     if (!map.current && mapContainer.current) {
-      const mapStyle = theme === "dark"
-        ? "https://tiles.openfreemap.org/styles/dark"
-        : "https://tiles.openfreemap.org/styles/bright";
+      const mapStyle =
+        theme === "dark"
+          ? "https://tiles.openfreemap.org/styles/dark"
+          : "https://tiles.openfreemap.org/styles/bright";
       map.current = new maplibregl.Map({
         container: mapContainer.current,
         style: mapStyle,
@@ -125,60 +151,38 @@ export default function DriverPage() {
         );
       }
     }
-  }, []);
+  }, [theme]);
 
-  const addCommuterMarkers = (rides: NonNullable<typeof pendingRides>) => {
-    if (!map.current) {
-      return;
-    }
+  const addCommuterMarkers = useCallback(
+    (rides: NonNullable<typeof pendingRides>) => {
+      const mapInstance = map.current;
+      if (!mapInstance) {
+        return;
+      }
 
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current.clear();
+      for (const marker of markersRef.current.values()) {
+        marker.remove();
+      }
+      markersRef.current.clear();
 
-    rides.forEach((ride) => {
-      const pickupEl = document.createElement("div");
-      pickupEl.style.width = "30px";
-      pickupEl.style.height = "30px";
-      pickupEl.style.backgroundColor = "#10B981";
-      pickupEl.style.borderRadius = "50%";
-      pickupEl.style.border = "3px solid white";
-      pickupEl.style.boxShadow = "0 0 8px rgba(16, 185, 129, 0.5)";
-      pickupEl.style.cursor = "pointer";
-      pickupEl.style.display = "flex";
-      pickupEl.style.alignItems = "center";
-      pickupEl.style.justifyContent = "center";
-      pickupEl.style.fontSize = "16px";
-      pickupEl.innerHTML = "📍";
+      for (const ride of rides) {
+        const pickupEl = createMarkerElement("#10B981", "📍");
+        const pickupMarker = new maplibregl.Marker({ element: pickupEl })
+          .setLngLat([ride.pickup.longitude, ride.pickup.latitude])
+          .addTo(mapInstance);
+        pickupEl.addEventListener("click", () => setSelectedRide(ride));
+        markersRef.current.set(`pickup-${ride._id}`, pickupMarker);
 
-      const pickupMarker = new maplibregl.Marker({ element: pickupEl })
-        .setLngLat([ride.pickup.longitude, ride.pickup.latitude])
-        .addTo(map.current!);
-
-      pickupEl.addEventListener("click", () => setSelectedRide(ride));
-      markersRef.current.set(`pickup-${ride._id}`, pickupMarker);
-
-      const dropoffEl = document.createElement("div");
-      dropoffEl.style.width = "30px";
-      dropoffEl.style.height = "30px";
-      dropoffEl.style.backgroundColor = "#EF4444";
-      dropoffEl.style.borderRadius = "50%";
-      dropoffEl.style.border = "3px solid white";
-      dropoffEl.style.boxShadow = "0 0 8px rgba(239, 68, 68, 0.5)";
-      dropoffEl.style.cursor = "pointer";
-      dropoffEl.style.display = "flex";
-      dropoffEl.style.alignItems = "center";
-      dropoffEl.style.justifyContent = "center";
-      dropoffEl.style.fontSize = "16px";
-      dropoffEl.innerHTML = "📌";
-
-      const dropoffMarker = new maplibregl.Marker({ element: dropoffEl })
-        .setLngLat([ride.dropoff.longitude, ride.dropoff.latitude])
-        .addTo(map.current!);
-
-      dropoffEl.addEventListener("click", () => setSelectedRide(ride));
-      markersRef.current.set(`dropoff-${ride._id}`, dropoffMarker);
-    });
-  };
+        const dropoffEl = createMarkerElement("#EF4444", "📌");
+        const dropoffMarker = new maplibregl.Marker({ element: dropoffEl })
+          .setLngLat([ride.dropoff.longitude, ride.dropoff.latitude])
+          .addTo(mapInstance);
+        dropoffEl.addEventListener("click", () => setSelectedRide(ride));
+        markersRef.current.set(`dropoff-${ride._id}`, dropoffMarker);
+      }
+    },
+    []
+  );
 
   // Update map markers when pending rides change
   useEffect(() => {
@@ -192,7 +196,7 @@ export default function DriverPage() {
       return;
     }
     if (activeRide && online) {
-      alert("Complete your current ride before going offline.");
+      showToast("Complete your current ride before going offline.", "error");
       return;
     }
     const newOnline = !online;
@@ -219,7 +223,7 @@ export default function DriverPage() {
       });
       setSelectedRide(null);
     } catch {
-      alert("This ride was already accepted by another driver.");
+      showToast("This ride was already accepted by another driver.", "error");
     }
   };
 
@@ -299,6 +303,7 @@ export default function DriverPage() {
             <button
               className="btn btn-secondary rounded-full px-3 py-2 text-rose-400 text-sm hover:text-rose-300 sm:px-4"
               onClick={logout}
+              type="button"
             >
               <FaSignOutAlt />
               <span className="hidden sm:inline">Logout</span>
@@ -306,6 +311,7 @@ export default function DriverPage() {
             <button
               className={`btn rounded-full px-3 py-2 text-sm sm:px-4 ${online ? "btn-success" : "btn-secondary"}`}
               onClick={handleToggleOnline}
+              type="button"
             >
               {online ? <FaToggleOn /> : <FaToggleOff />}
               {online ? "Online" : "Offline"}
@@ -317,37 +323,47 @@ export default function DriverPage() {
       {/* Mobile: Bottom navigation bar - larger for touch accessibility */}
       <div className="fixed right-0 bottom-0 left-0 z-20 flex items-center justify-between border-[var(--border)] border-t bg-[var(--surface)]/95 px-4 py-3 backdrop-blur md:hidden">
         <Link
-          href="/operator/profile"
           className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2 ${
             theme === "light"
               ? "border-sky-600 bg-white text-slate-800"
               : "border-sky-500/50 bg-slate-800 text-white"
           }`}
+          href="/operator/profile"
         >
-          <div className={`flex h-10 w-10 items-center justify-center rounded-lg text-base ${
-            theme === "light" ? "bg-sky-100 text-sky-700" : "bg-slate-700 text-white"
-          }`}>
+          <div
+            className={`flex h-10 w-10 items-center justify-center rounded-lg text-base ${
+              theme === "light"
+                ? "bg-sky-100 text-sky-700"
+                : "bg-slate-700 text-white"
+            }`}
+          >
             <FaUserTie />
           </div>
           <div className="min-w-0">
-            <p className={`truncate font-semibold text-sm ${
-              theme === "light" ? "text-slate-900" : "text-white"
-            }`}>
+            <p
+              className={`truncate font-semibold text-sm ${
+                theme === "light" ? "text-slate-900" : "text-white"
+              }`}
+            >
               {operatorProfile?.name ?? "Loading..."}
             </p>
-            <p className={`truncate text-xs ${
-              theme === "light" ? "text-slate-500" : "text-slate-400"
-            }`}>
+            <p
+              className={`truncate text-xs ${
+                theme === "light" ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
               {operatorProfile?.vehicleInfo.plateNumber ?? ""}
             </p>
           </div>
         </Link>
         <div className="flex items-center gap-2">
-          <div className={`flex h-11 items-center justify-center rounded-xl border-2 px-2 ${
-            theme === "light"
-              ? "border-slate-300 bg-white"
-              : "border-slate-500 bg-slate-700"
-          }`}>
+          <div
+            className={`flex h-11 items-center justify-center rounded-xl border-2 px-2 ${
+              theme === "light"
+                ? "border-slate-300 bg-white"
+                : "border-slate-500 bg-slate-700"
+            }`}
+          >
             <ThemeToggle />
           </div>
           <button
@@ -357,20 +373,16 @@ export default function DriverPage() {
                 : "border-rose-400 bg-rose-600 text-white"
             }`}
             onClick={logout}
+            type="button"
           >
             <FaSignOutAlt className="text-sm" />
           </button>
           <button
             className={`inline-flex h-11 items-center justify-center gap-1 rounded-xl px-4 font-semibold text-sm ${
-              online
-                ? theme === "light"
-                  ? "border-emerald-500 bg-emerald-500 text-white"
-                  : "border-emerald-400 bg-emerald-600 text-white"
-                : theme === "light"
-                  ? "border-slate-400 bg-slate-200 text-slate-700"
-                  : "border-slate-400 bg-slate-700 text-slate-200"
+              online ? onlineToggleClass(theme) : offlineToggleClass(theme)
             }`}
             onClick={handleToggleOnline}
+            type="button"
           >
             {online ? (
               <FaToggleOn className="text-base" />
@@ -441,6 +453,7 @@ export default function DriverPage() {
                 }`}
                 key={ride._id}
                 onClick={() => setSelectedRide(ride)}
+                type="button"
               >
                 <div className="mb-2 flex items-start justify-between">
                   <div>
@@ -507,6 +520,7 @@ export default function DriverPage() {
                       selectedRide.commuter?.phone &&
                       handleCall(selectedRide.commuter.phone)
                     }
+                    type="button"
                   >
                     <FaPhone className="text-[10px] md:text-sm" />
                     <span className="hidden md:inline">Call</span>
@@ -569,6 +583,7 @@ export default function DriverPage() {
               className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-green-600 px-4 font-bold text-lg text-white transition hover:bg-green-500 hover:shadow-green-500/30 hover:shadow-lg disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)]"
               disabled={!operatorProfile}
               onClick={() => handleAcceptRide(selectedRide._id)}
+              type="button"
             >
               <FaCheckCircle className="text-xl" />
               Accept Ride
@@ -577,6 +592,7 @@ export default function DriverPage() {
             <button
               className="w-full rounded-xl border border-[var(--border)] py-2 text-[var(--text-muted)] text-xs transition hover:text-[var(--foreground)] md:rounded-2xl md:py-2 md:text-sm"
               onClick={() => setSelectedRide(null)}
+              type="button"
             >
               Close
             </button>
@@ -603,13 +619,9 @@ export default function DriverPage() {
                   </p>
                 </div>
                 <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 font-semibold text-[10px] md:px-3 md:py-1 md:text-xs ${
-                    activeRide.status === "accepted"
-                      ? "bg-blue-500/20 text-blue-400"
-                      : activeRide.status === "inProgress"
-                        ? "bg-yellow-500/20 text-yellow-400"
-                        : "bg-green-500/20 text-green-400"
-                  }`}
+                  className={`shrink-0 rounded-full px-2 py-0.5 font-semibold text-[10px] md:px-3 md:py-1 md:text-xs ${rideStatusBadgeClass(
+                    activeRide.status
+                  )}`}
                 >
                   {activeRideStatusLabel[activeRide.status] ??
                     activeRide.status.toUpperCase()}
@@ -621,6 +633,7 @@ export default function DriverPage() {
                   <button
                     className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border-2 border-sky-500/50 bg-sky-600 px-4 font-semibold text-white transition hover:bg-sky-500"
                     onClick={() => handleCall(activeRideCommuter.phone)}
+                    type="button"
                   >
                     <FaPhone className="text-base" />
                     Call
@@ -633,6 +646,7 @@ export default function DriverPage() {
                       ? handlePickedUp
                       : handleCompleteRide
                   }
+                  type="button"
                 >
                   {activeRide.status === "accepted" ? "Picked Up" : "Complete"}
                 </button>

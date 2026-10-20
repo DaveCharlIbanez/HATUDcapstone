@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { useAuth } from "@/lib/authContext";
 
+const UPPERCASE_LETTER = /[A-Z]/;
+const DIGIT = /[0-9]/;
+
 export default function SignupPage() {
   const [formData, setFormData] = useState({
     name: "",
@@ -43,11 +46,11 @@ export default function SignupPage() {
       setError("Password must be at least 8 characters");
       return;
     }
-    if (!/[A-Z]/.test(formData.password)) {
+    if (!UPPERCASE_LETTER.test(formData.password)) {
       setError("Password must contain at least one uppercase letter");
       return;
     }
-    if (!/[0-9]/.test(formData.password)) {
+    if (!DIGIT.test(formData.password)) {
       setError("Password must contain at least one number");
       return;
     }

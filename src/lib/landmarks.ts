@@ -13,15 +13,15 @@ export type LandmarkCategory =
 export type Municipality = "sanJose" | "sibalom";
 
 export interface Landmark {
-  id: string;
-  name: string;
   address: string;
   category: LandmarkCategory;
-  municipality: Municipality;
   coordinates: {
     lat: number;
     lng: number;
   };
+  id: string;
+  municipality: Municipality;
+  name: string;
 }
 
 export const CATEGORY_INFO: Record<
@@ -49,7 +49,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-municipal-hall",
     name: "San Jose de Buenavista Municipal Hall",
-    address: "Representative Salazar Street, Madrangca, Poblacion, Maybato North, San Jose de Buenavista, Antique",
+    address:
+      "Representative Salazar Street, Madrangca, Poblacion, Maybato North, San Jose de Buenavista, Antique",
     category: "government",
     municipality: "sanJose",
     coordinates: { lat: 10.7468, lng: 121.9414 },
@@ -65,7 +66,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-st-peter-church",
     name: "St. Peter Church",
-    address: "Real Street, Madrangca, Poblacion, San Fernando, San Jose de Buenavista, Antique",
+    address:
+      "Real Street, Madrangca, Poblacion, San Fernando, San Jose de Buenavista, Antique",
     category: "church",
     municipality: "sanJose",
     coordinates: { lat: 10.8005, lng: 121.9478 },
@@ -73,7 +75,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-antique-national-school",
     name: "Antique National School",
-    address: "Tobias A. Fornier Street, Atabay, Poblacion, Badiang, San Jose de Buenavista, Antique",
+    address:
+      "Tobias A. Fornier Street, Atabay, Poblacion, Badiang, San Jose de Buenavista, Antique",
     category: "school",
     municipality: "sanJose",
     coordinates: { lat: 10.7525, lng: 121.9424 },
@@ -89,7 +92,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-capadocia-memorial-school",
     name: "Governor Santos Capadocia Memorial School",
-    address: "Gobierno Street, Bugante Point, Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
+    address:
+      "Gobierno Street, Bugante Point, Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
     category: "school",
     municipality: "sanJose",
     coordinates: { lat: 10.7406, lng: 121.9377 },
@@ -97,7 +101,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-angel-salazar-hospital",
     name: "Angel Salazar Memorial General Hospital",
-    address: "Tobias A. Fornier Street, Atabay, Poblacion, Badiang, San Jose de Buenavista, Antique",
+    address:
+      "Tobias A. Fornier Street, Atabay, Poblacion, Badiang, San Jose de Buenavista, Antique",
     category: "hospital",
     municipality: "sanJose",
     coordinates: { lat: 10.7535, lng: 121.9424 },
@@ -105,7 +110,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-north-south-terminal",
     name: "San Jose New North and South Terminal",
-    address: "Angel Abiera Salazar Street, Atabay, Poblacion, Badiang, San Jose de Buenavista, Antique",
+    address:
+      "Angel Abiera Salazar Street, Atabay, Poblacion, Badiang, San Jose de Buenavista, Antique",
     category: "terminal",
     municipality: "sanJose",
     coordinates: { lat: 10.7549, lng: 121.9346 },
@@ -113,7 +119,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-tricycle-terminal",
     name: "Tricycle Terminal",
-    address: "Villavert Jimenez Street, Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
+    address:
+      "Villavert Jimenez Street, Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
     category: "terminal",
     municipality: "sanJose",
     coordinates: { lat: 10.7451, lng: 121.943 },
@@ -121,7 +128,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-business-park",
     name: "San Jose de Buenavista Business Park",
-    address: "Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
+    address:
+      "Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
     category: "mall",
     municipality: "sanJose",
     coordinates: { lat: 10.7457, lng: 121.9423 },
@@ -129,7 +137,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-citymall",
     name: "CityMall Antique",
-    address: "San Jose Street, Bugante Point, Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
+    address:
+      "San Jose Street, Bugante Point, Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
     category: "mall",
     municipality: "sanJose",
     coordinates: { lat: 10.7425, lng: 121.9408 },
@@ -137,7 +146,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-gaisano",
     name: "Gaisano Grand Antique",
-    address: "Governor Fullon Street, Aguilon Subdivision, San Angel, Poblacion, Maybato North, San Jose de Buenavista, Antique",
+    address:
+      "Governor Fullon Street, Aguilon Subdivision, San Angel, Poblacion, Maybato North, San Jose de Buenavista, Antique",
     category: "mall",
     municipality: "sanJose",
     coordinates: { lat: 10.7432, lng: 121.9484 },
@@ -145,7 +155,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-freedom-park",
     name: "Evelio B. Javier Freedom Park",
-    address: "Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
+    address:
+      "Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
     category: "park",
     municipality: "sanJose",
     coordinates: { lat: 10.744, lng: 121.9412 },
@@ -153,7 +164,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-robinsons",
     name: "Robinsons Supermarket",
-    address: "Iloilo-Antique Road, Aguilon Subdivision, San Angel, Poblacion, Maybato Sur, San Jose de Buenavista, Antique",
+    address:
+      "Iloilo-Antique Road, Aguilon Subdivision, San Angel, Poblacion, Maybato Sur, San Jose de Buenavista, Antique",
     category: "mall",
     municipality: "sanJose",
     coordinates: { lat: 10.7357, lng: 121.9515 },
@@ -161,7 +173,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-regina-restaurant",
     name: "Regina's Restaurant",
-    address: "Capadocia Street, Bugante Point, Madrangca, Poblacion, Maybato North, San Jose de Buenavista, Antique",
+    address:
+      "Capadocia Street, Bugante Point, Madrangca, Poblacion, Maybato North, San Jose de Buenavista, Antique",
     category: "restaurant",
     municipality: "sanJose",
     coordinates: { lat: 10.744, lng: 121.9401 },
@@ -169,7 +182,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-max-restaurant",
     name: "Max's Restaurant",
-    address: "Iloilo-Antique Road, Aguilon Subdivision, San Angel, Poblacion, Maybato North, San Jose de Buenavista, Antique",
+    address:
+      "Iloilo-Antique Road, Aguilon Subdivision, San Angel, Poblacion, Maybato North, San Jose de Buenavista, Antique",
     category: "restaurant",
     municipality: "sanJose",
     coordinates: { lat: 10.7363, lng: 121.9516 },
@@ -177,7 +191,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-moscoso-restaurant",
     name: "moscoso restaurant",
-    address: "Real Street, Madrangca, Poblacion, San Fernando, San Jose de Buenavista, Antique",
+    address:
+      "Real Street, Madrangca, Poblacion, San Fernando, San Jose de Buenavista, Antique",
     category: "restaurant",
     municipality: "sanJose",
     coordinates: { lat: 10.7995, lng: 121.9483 },
@@ -185,7 +200,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sj-plaza-cafe",
     name: "The Plaza Cafe",
-    address: "Ricarze Street, Bugante Point, Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
+    address:
+      "Ricarze Street, Bugante Point, Malaiba, Poblacion, Maybato North, San Jose de Buenavista, Antique",
     category: "cafe",
     municipality: "sanJose",
     coordinates: { lat: 10.7436, lng: 121.9404 },
@@ -217,7 +233,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sb-egana-elementary",
     name: "Egaña Elementary School",
-    address: "Hamtic - Bia-an - Egaña - Sibalom Road, Lotilla, Tigbalua Ⅱ, Catungan Ⅰ, Sibalom, Antique",
+    address:
+      "Hamtic - Bia-an - Egaña - Sibalom Road, Lotilla, Tigbalua Ⅱ, Catungan Ⅰ, Sibalom, Antique",
     category: "school",
     municipality: "sibalom",
     coordinates: { lat: 10.7483, lng: 122.0081 },
@@ -225,7 +242,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sb-egana-high-school",
     name: "Egaña National High School",
-    address: "Hamtic - Bia-an - Egaña - Sibalom Road, Lotilla, Tigbalua Ⅱ, Catungan Ⅰ, Sibalom, Antique",
+    address:
+      "Hamtic - Bia-an - Egaña - Sibalom Road, Lotilla, Tigbalua Ⅱ, Catungan Ⅰ, Sibalom, Antique",
     category: "school",
     municipality: "sibalom",
     coordinates: { lat: 10.749, lng: 122.0073 },
@@ -233,7 +251,8 @@ export const landmarks: Landmark[] = [
   {
     id: "sb-ramon-maza-hospital",
     name: "Ramon Maza, Sr. Memorial District Hospital",
-    address: "Hamtic - Bia-an - Egaña - Sibalom Road, Lotilla, Catungan Ⅰ, Sibalom, Antique",
+    address:
+      "Hamtic - Bia-an - Egaña - Sibalom Road, Lotilla, Catungan Ⅰ, Sibalom, Antique",
     category: "hospital",
     municipality: "sibalom",
     coordinates: { lat: 10.7775, lng: 122.0198 },
@@ -259,9 +278,7 @@ export const getLandmarksByMunicipality = (
 
 export const getLandmarksByCategory = (
   category: LandmarkCategory
-): Landmark[] => {
-  return landmarks.filter((l) => l.category === category);
-};
+): Landmark[] => landmarks.filter((l) => l.category === category);
 
 export const getCategoryLabel = (category: LandmarkCategory): string => {
   const labels: Record<LandmarkCategory, string> = {

@@ -48,16 +48,14 @@ interface SignupData {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+/**
+ * The session token is kept in localStorage and passed to Convex explicitly
+ * on every call. It is deliberately not mirrored into a cookie: nothing reads
+ * it, and a cookie written from JavaScript can never be HttpOnly, so it would
+ * only widen the attack surface. Moving to an HttpOnly cookie requires a
+ * server runtime, which the Capacitor static export does not have.
+ */
 const STORAGE_KEY = "hatud_session_token";
-const COOKIE_NAME = "hatud_session_token";
-
-function setSessionCookie(token: string) {
-  document.cookie = `${COOKIE_NAME}=${token}; path=/; max-age=${7 * 24 * 3600}; SameSite=Lax`;
-}
-
-function clearSessionCookie() {
-  document.cookie = `${COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionToken, setSessionToken] = useState<string | null>(() =>
@@ -87,7 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (sessionData === null) {
       // Token invalid or expired — clear it
       localStorage.removeItem(STORAGE_KEY);
-      clearSessionCookie();
       setSessionToken(null);
       setUser(null);
     } else {
@@ -112,7 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await loginMutation({ email, password });
       localStorage.setItem(STORAGE_KEY, result.sessionToken);
-      setSessionCookie(result.sessionToken);
       setSessionToken(result.sessionToken);
       return { success: true };
     } catch (error) {
@@ -137,7 +133,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         vehicleInfo: data.vehicleInfo,
       });
       localStorage.setItem(STORAGE_KEY, result.sessionToken);
-      setSessionCookie(result.sessionToken);
       setSessionToken(result.sessionToken);
       return { success: true };
     } catch (error) {
@@ -157,7 +152,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     localStorage.removeItem(STORAGE_KEY);
-    clearSessionCookie();
     setSessionToken(null);
     setUser(null);
     router.replace("/login");

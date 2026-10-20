@@ -14,6 +14,7 @@ import {
   FaWallet,
 } from "react-icons/fa";
 import { ThemeSlider } from "@/components/ThemeSlider";
+import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/authContext";
 import { operatorProfile } from "@/lib/operatorProfile";
 
@@ -53,9 +54,20 @@ const rideHistory: RideSummary[] = [
   },
 ];
 
+function rideStatusClass(status: string): string {
+  if (status === "completed") {
+    return "bg-emerald-500/20 text-emerald-400";
+  }
+  if (status === "pending") {
+    return "bg-amber-500/20 text-amber-400";
+  }
+  return "bg-red-500/20 text-red-400";
+}
+
 export default function OperatorProfilePage() {
   const router = useRouter();
   const { logout, user, isLoading: authLoading } = useAuth();
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!(authLoading || user)) {
@@ -105,6 +117,7 @@ export default function OperatorProfilePage() {
             <button
               className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-semibold text-rose-400 text-sm shadow-sm transition hover:bg-rose-500/20"
               onClick={logout}
+              type="button"
             >
               <FaSignOutAlt />
               Sign Out
@@ -298,13 +311,9 @@ export default function OperatorProfilePage() {
                         ₱{ride.fare}
                       </span>
                       <span
-                        className={`rounded-2xl px-3 py-2 font-semibold text-xs uppercase ${
-                          ride.status === "completed"
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : ride.status === "pending"
-                              ? "bg-amber-500/20 text-amber-400"
-                              : "bg-red-500/20 text-red-400"
-                        }`}
+                        className={`rounded-2xl px-3 py-2 font-semibold text-xs uppercase ${rideStatusClass(
+                          ride.status
+                        )}`}
                       >
                         {ride.status}
                       </span>
@@ -405,7 +414,9 @@ export default function OperatorProfilePage() {
                 </button>
                 <button
                   className="w-full rounded-3xl border border-[var(--border)] bg-[var(--surface-strong)] px-4 py-3 font-semibold text-[var(--foreground)] text-sm transition hover:bg-[var(--surface-muted)]"
-                  onClick={() => alert("Payout statements coming soon.")}
+                  onClick={() =>
+                    showToast("Payout statements coming soon.", "info")
+                  }
                   type="button"
                 >
                   View payout statement

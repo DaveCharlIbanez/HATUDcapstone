@@ -152,6 +152,28 @@ export const getFareQuote = query({
   },
 });
 
+/**
+ * The caller's most recent completed ride, used for payment and feedback.
+ */
+export const getLatestCompletedForMe = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await resolveActor(ctx, args.sessionToken);
+    if (actor.role !== "commuter" || !actor.commuterId) {
+      throw new Error("Forbidden: only passengers have completed rides");
+    }
+    const commuterId = actor.commuterId;
+
+    const rides = await ctx.db
+      .query("rides")
+      .withIndex("by_commuterId", (q) => q.eq("commuterId", commuterId))
+      .order("desc")
+      .collect();
+
+    return rides.find((ride) => ride.status === "completed") ?? null;
+  },
+});
+
 // ─── Legacy compatibility ─────────────────────────────────────────────────────
 // Superseded by getActiveForMe / getPartnerLocation. Kept only for the Android
 // builds that predate session-token auth. See convex/lib/legacyAccess.ts.

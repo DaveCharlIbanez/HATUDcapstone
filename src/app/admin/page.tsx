@@ -13,12 +13,14 @@ import {
   FaUserCheck,
   FaUsers,
 } from "react-icons/fa";
+import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/authContext";
 import { api } from "../../../convex/_generated/api";
 
 export default function AdminPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, logout, sessionToken } = useAuth();
+  const { showToast } = useToast();
   const [expandedSections, setExpandedSections] = useState({
     drivers: false,
     maps: false,
@@ -42,8 +44,7 @@ export default function AdminPage() {
     if (!(authLoading || user)) {
       router.push("/login");
     } else if (!authLoading && user && user.role !== "admin") {
-      const targetRoute =
-        user.role === "operator" ? "/operator" : "/map";
+      const targetRoute = user.role === "operator" ? "/operator" : "/map";
       router.push(targetRoute);
     }
   }, [user, authLoading, router]);
@@ -56,11 +57,11 @@ export default function AdminPage() {
   };
 
   const handleApproveDriver = (driverName: string) => {
-    alert(`Driver ${driverName} has been approved!`);
+    showToast(`Driver ${driverName} has been approved!`, "info");
   };
 
   const handleRejectDriver = (driverName: string) => {
-    alert(`Driver ${driverName} has been rejected.`);
+    showToast(`Driver ${driverName} has been rejected.`, "info");
   };
 
   const adminMetrics = metrics
@@ -127,6 +128,7 @@ export default function AdminPage() {
             <button
               className="btn btn-secondary max-w-max rounded-full text-rose-400 hover:text-rose-300"
               onClick={logout}
+              type="button"
             >
               Logout
             </button>
@@ -164,6 +166,7 @@ export default function AdminPage() {
           <button
             className="flex w-full cursor-pointer items-center justify-between"
             onClick={() => toggleSection("drivers")}
+            type="button"
           >
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-strong)] text-sky-400">
@@ -214,12 +217,14 @@ export default function AdminPage() {
                         <button
                           className="rounded-full bg-green-600 px-4 py-2 font-semibold text-sm text-white transition hover:bg-green-700"
                           onClick={() => handleApproveDriver(driver.name)}
+                          type="button"
                         >
                           Approve
                         </button>
                         <button
                           className="rounded-full bg-red-600 px-4 py-2 font-semibold text-sm text-white transition hover:bg-red-700"
                           onClick={() => handleRejectDriver(driver.name)}
+                          type="button"
                         >
                           Reject
                         </button>
@@ -240,6 +245,7 @@ export default function AdminPage() {
           <button
             className="flex w-full cursor-pointer items-center justify-between"
             onClick={() => toggleSection("maps")}
+            type="button"
           >
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-strong)] text-sky-400">
@@ -265,14 +271,18 @@ export default function AdminPage() {
             <div className="mt-6 space-y-4">
               <button
                 className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white transition hover:bg-sky-700"
-                onClick={() => alert("Service zone editor coming soon.")}
+                onClick={() =>
+                  showToast("Service zone editor coming soon.", "info")
+                }
                 type="button"
               >
                 Edit Service Zones
               </button>
               <button
                 className="w-full rounded-2xl bg-sky-600 px-4 py-3 font-semibold text-white transition hover:bg-sky-700"
-                onClick={() => alert("Route restrictions coming soon.")}
+                onClick={() =>
+                  showToast("Route restrictions coming soon.", "info")
+                }
                 type="button"
               >
                 Manage Route Restrictions
@@ -292,6 +302,7 @@ export default function AdminPage() {
           <button
             className="flex w-full cursor-pointer items-center justify-between"
             onClick={() => toggleSection("dropout")}
+            type="button"
           >
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-strong)] text-red-400">
@@ -387,7 +398,9 @@ export default function AdminPage() {
             </div>
             <button
               className="btn btn-primary mt-6 w-full rounded-3xl text-sm"
-              onClick={() => alert("Account management coming soon.")}
+              onClick={() =>
+                showToast("Account management coming soon.", "info")
+              }
               type="button"
             >
               Open
@@ -410,7 +423,7 @@ export default function AdminPage() {
             </div>
             <button
               className="btn btn-primary mt-6 w-full rounded-3xl text-sm"
-              onClick={() => alert("Reports coming soon.")}
+              onClick={() => showToast("Reports coming soon.", "info")}
               type="button"
             >
               Open

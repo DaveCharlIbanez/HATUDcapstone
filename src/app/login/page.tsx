@@ -4,7 +4,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { FaFacebookF, FaGoogle } from "react-icons/fa6";
+import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/authContext";
+
+function routeForRole(role: string): string {
+  if (role === "admin") {
+    return "admin";
+  }
+  if (role === "operator") {
+    return "operator";
+  }
+  return "map";
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -13,17 +24,12 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { login, user } = useAuth();
+  const { showToast } = useToast();
 
   // Redirect already-authenticated users away from the login page
   useEffect(() => {
     if (user) {
-      const targetRoute =
-        user.role === "admin"
-          ? "admin"
-          : user.role === "operator"
-            ? "operator"
-            : "map";
-      router.replace(`/${targetRoute}`);
+      router.replace(`/${routeForRole(user.role)}`);
     }
   }, [user, router]);
 
@@ -118,14 +124,14 @@ export default function LoginPage() {
           <div className="flex justify-center gap-4">
             <button
               className="flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] transition-all hover:scale-105 hover:bg-[var(--surface-muted)]"
-              onClick={() => alert("Social login coming soon.")}
+              onClick={() => showToast("Social login coming soon.", "info")}
               type="button"
             >
               <FaGoogle className="text-red-400 text-xl" />
             </button>
             <button
               className="flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] transition-all hover:scale-105 hover:bg-[var(--surface-muted)]"
-              onClick={() => alert("Social login coming soon.")}
+              onClick={() => showToast("Social login coming soon.", "info")}
               type="button"
             >
               <FaFacebookF className="text-blue-400 text-xl" />

@@ -105,6 +105,15 @@ export default defineSchema({
     ),
     fare: v.number(),
     distance: v.number(),
+    paymentStatus: v.optional(
+      v.union(
+        v.literal("unpaid"),
+        v.literal("pending"),
+        v.literal("paid"),
+        v.literal("failed")
+      )
+    ),
+    paidAt: v.optional(v.number()),
     operatorLocation: v.optional(
       v.object({
         latitude: v.number(),
@@ -137,6 +146,29 @@ export default defineSchema({
   })
     .index("by_rideId", ["rideId"])
     .index("by_operatorId", ["operatorId"]),
+
+  payments: defineTable({
+    rideId: v.id("rides"),
+    commuterId: v.id("commuters"),
+    amount: v.number(),
+    currency: v.literal("PHP"),
+    provider: v.literal("gcash"),
+    providerRef: v.string(),
+    referenceNumber: v.string(),
+    status: v.union(
+      v.literal("PENDING"),
+      v.literal("AUTHORIZED"),
+      v.literal("SETTLED"),
+      v.literal("FAILED"),
+      v.literal("EXPIRED"),
+      v.literal("REFUNDED")
+    ),
+    failureReason: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_rideId", ["rideId"])
+    .index("by_commuterId", ["commuterId"]),
 
   sessions: defineTable({
     userId: v.id("users"),

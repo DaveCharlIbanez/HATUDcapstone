@@ -9,17 +9,17 @@ import { ChatBubble } from "@/components/ChatBubble";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth } from "@/lib/authContext";
-import { getRoute } from "@/lib/mapClient";
+import { getRoute, type PlaceSuggestion, searchPlace } from "@/lib/mapClient";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 
 interface Vehicle {
+  /** Fallback shown before the server quote arrives. */
+  basePrice: number;
   capacity: number;
   eta: string;
   icon: string;
   name: string;
-  /** Fallback shown before the server quote arrives. */
-  basePrice: number;
   type: "standard" | "priority";
 }
 
@@ -33,8 +33,10 @@ const CommutersPage = () => {
   const [dropoff, setDropoff] = useState("");
   const [pickupCoords, setPickupCoords] = useState({ lat: 0, lng: 0 });
   const [dropoffCoords, setDropoffCoords] = useState({ lat: 0, lng: 0 });
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [pickupSuggestions, setPickupSuggestions] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [pickupSuggestions, setPickupSuggestions] = useState<PlaceSuggestion[]>(
+    []
+  );
   const [step, setStep] = useState<
     "location" | "vehicle" | "booking" | "tracking"
   >("location");
@@ -70,7 +72,9 @@ const CommutersPage = () => {
 
   const createRide = useMutation(api.rides.create);
   const cancelRide = useMutation(api.rides.cancel);
-  const updateCommuterLocationMutation = useMutation(api.rides.updateCommuterLocation);
+  const updateCommuterLocationMutation = useMutation(
+    api.rides.updateCommuterLocation
+  );
 
   const partnerLocation = useQuery(
     api.rides.getPartnerLocation,
@@ -86,8 +90,13 @@ const CommutersPage = () => {
   const operatorMarkerRef = useRef<maplibregl.Marker | null>(null);
   const routeLayerId = "route-line";
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const locationRef = useRef<{ latitude: number; longitude: number } | null>(null);
-  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const locationRef = useRef<{ latitude: number; longitude: number } | null>(
+    null
+  );
+  const [_currentLocation, setCurrentLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   const vehicles: Vehicle[] = [
     {
@@ -111,7 +120,9 @@ const CommutersPage = () => {
   // The fare is priced on the server. Coordinates are only known once both
   // addresses have been resolved, and the default of 0,0 is not a real point.
   const hasRoute =
-    pickupCoords.lat !== 0 && dropoffCoords.lat !== 0 && dropoffCoords.lng !== 0;
+    pickupCoords.lat !== 0 &&
+    dropoffCoords.lat !== 0 &&
+    dropoffCoords.lng !== 0;
 
   const fareQuote = useQuery(
     api.rides.getFareQuote,
@@ -262,7 +273,8 @@ const CommutersPage = () => {
   useEffect(() => {
     if (
       !activeRide ||
-      (activeRide.status !== "accepted" && activeRide.status !== "inProgress") ||
+      (activeRide.status !== "accepted" &&
+        activeRide.status !== "inProgress") ||
       !sessionToken
     ) {
       return;
@@ -270,7 +282,9 @@ const CommutersPage = () => {
 
     const sendLocation = async () => {
       const loc = locationRef.current;
-      if (!loc) return;
+      if (!loc) {
+        return;
+      }
 
       try {
         await updateCommuterLocationMutation({
@@ -293,7 +307,7 @@ const CommutersPage = () => {
   // Display operator marker and route when location is available
   useEffect(() => {
     const loc = locationRef.current;
-    if (!map.current || !operatorLocation || !loc) {
+    if (!(map.current && operatorLocation && loc)) {
       return;
     }
 
@@ -306,7 +320,12 @@ const CommutersPage = () => {
     }
 
     // Add or update operator marker
-    if (!operatorMarkerRef.current) {
+    if (operatorMarkerRef.current) {
+      operatorMarkerRef.current.setLngLat([
+        operatorLocation.longitude,
+        operatorLocation.latitude,
+      ]);
+    } else {
       const operatorEl = document.createElement("div");
       operatorEl.style.width = "24px";
       operatorEl.style.height = "24px";
@@ -323,15 +342,14 @@ const CommutersPage = () => {
       operatorMarkerRef.current = new maplibregl.Marker({ element: operatorEl })
         .setLngLat([operatorLocation.longitude, operatorLocation.latitude])
         .addTo(map.current);
-    } else {
-      operatorMarkerRef.current.setLngLat([operatorLocation.longitude, operatorLocation.latitude]);
     }
 
     // Check if location is stale (30 seconds)
-    const isStale = Date.now() - operatorLocation.updatedAt > 30000;
+    const isStale = Date.now() - operatorLocation.updatedAt > 30_000;
     if (isStale && operatorMarkerRef.current.getElement()) {
       operatorMarkerRef.current.getElement().style.backgroundColor = "#94a3b8";
-      operatorMarkerRef.current.getElement().style.boxShadow = "0 0 8px rgba(148, 163, 184, 0.5)";
+      operatorMarkerRef.current.getElement().style.boxShadow =
+        "0 0 8px rgba(148, 163, 184, 0.5)";
     }
 
     // Draw route from commuter to operator
@@ -373,7 +391,10 @@ const CommutersPage = () => {
 
   // Clear markers when ride ends
   useEffect(() => {
-    if (!activeRide || (activeRide.status !== "accepted" && activeRide.status !== "inProgress")) {
+    if (
+      !activeRide ||
+      (activeRide.status !== "accepted" && activeRide.status !== "inProgress")
+    ) {
       if (operatorMarkerRef.current) {
         operatorMarkerRef.current.remove();
         operatorMarkerRef.current = null;
@@ -390,21 +411,14 @@ const CommutersPage = () => {
   const handlePickupSearch = async (query: string) => {
     setPickup(query);
     if (query.length > 2) {
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${query}, Antique, Philippines`
-        );
-        const data = await response.json();
-        setPickupSuggestions(data.slice(0, 4));
-      } catch (error) {
-        console.error("Pickup search error:", error);
-      }
+      const results = await searchPlace(`${query}, Antique, Philippines`);
+      setPickupSuggestions(results.slice(0, 4));
     } else {
       setPickupSuggestions([]);
     }
   };
 
-  const handlePickupSelect = (place: any) => {
+  const handlePickupSelect = (place: PlaceSuggestion) => {
     setPickup(place.display_name);
     setPickupCoords({
       lat: Number.parseFloat(place.lat),
@@ -416,21 +430,14 @@ const CommutersPage = () => {
   const handleSearch = async (query: string) => {
     setDropoff(query);
     if (query.length > 2) {
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${query}, Antique, Philippines`
-        );
-        const data = await response.json();
-        setSuggestions(data.slice(0, 5));
-      } catch (error) {
-        console.error("Search error:", error);
-      }
+      const results = await searchPlace(`${query}, Antique, Philippines`);
+      setSuggestions(results.slice(0, 5));
     } else {
       setSuggestions([]);
     }
   };
 
-  const handleSelect = (place: any) => {
+  const handleSelect = (place: PlaceSuggestion) => {
     setDropoff(place.display_name);
     setDropoffCoords({
       lat: Number.parseFloat(place.lat),
@@ -519,6 +526,7 @@ const CommutersPage = () => {
           <button
             className="inline-flex items-center gap-2 rounded-full bg-rose-500/20 px-3 py-2 font-medium text-rose-400 text-sm transition-colors hover:bg-rose-500/30"
             onClick={logout}
+            type="button"
           >
             <FaSignOutAlt className="text-xs" />
             Logout
@@ -554,11 +562,12 @@ const CommutersPage = () => {
                   </div>
 
                   {/* PICKUP SUGGESTIONS */}
-                  {pickupSuggestions.map((place, i) => (
+                  {pickupSuggestions.map((place) => (
                     <button
                       className="block w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-3 text-left text-[var(--foreground)] transition hover:border-[var(--border)] hover:bg-[var(--surface)]"
-                      key={i}
+                      key={place.place_id}
                       onClick={() => handlePickupSelect(place)}
+                      type="button"
                     >
                       <div className="flex items-center gap-3">
                         <FaMapMarkerAlt className="shrink-0 text-emerald-400" />
@@ -579,11 +588,12 @@ const CommutersPage = () => {
                 </div>
 
                 {/* DROPOFF SUGGESTIONS */}
-                {suggestions.map((place, i) => (
+                {suggestions.map((place) => (
                   <button
                     className="mb-2 block w-full rounded-3xl border border-[var(--border)] bg-[var(--surface)]/90 p-3 text-left text-[var(--foreground)] transition hover:border-[var(--border)] hover:bg-[var(--surface)]"
-                    key={i}
+                    key={place.place_id}
                     onClick={() => handleSelect(place)}
+                    type="button"
                   >
                     <div className="flex items-center gap-3">
                       <FaMapMarkerAlt className="text-sky-400" />
@@ -597,6 +607,7 @@ const CommutersPage = () => {
                   <button
                     className="mt-4 w-full rounded-3xl bg-sky-500 py-3 font-semibold text-sm text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400"
                     onClick={() => setStep("vehicle")}
+                    type="button"
                   >
                     Choose a ride
                   </button>
@@ -619,6 +630,7 @@ const CommutersPage = () => {
                       }`}
                       key={vehicle.type}
                       onClick={() => setSelectedVehicle(vehicle.type)}
+                      type="button"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -651,10 +663,11 @@ const CommutersPage = () => {
                 {/* BOOK BUTTON */}
                 <button
                   className="mt-2 w-full rounded-3xl bg-sky-500 py-3 font-semibold text-sm text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)]"
-                  disabled={!(
-                    selectedVehicle && commuter && sessionToken && fareQuote
-                  )}
+                  disabled={
+                    !(selectedVehicle && commuter && sessionToken && fareQuote)
+                  }
                   onClick={handleBookRide}
+                  type="button"
                 >
                   Book{" "}
                   {selectedVehicle
@@ -679,6 +692,7 @@ const CommutersPage = () => {
                     <button
                       className="w-full rounded-3xl bg-[var(--surface-strong)] py-3 font-semibold text-[var(--foreground)] text-sm transition hover:bg-[var(--surface-muted)]"
                       onClick={handleCancelRide}
+                      type="button"
                     >
                       Cancel
                     </button>
@@ -727,6 +741,7 @@ const CommutersPage = () => {
                     <button
                       className="w-full rounded-3xl bg-sky-500 py-3 font-semibold text-sm text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400"
                       onClick={handleConfirmBooking}
+                      type="button"
                     >
                       Confirm & Start Ride
                     </button>
@@ -780,12 +795,14 @@ const CommutersPage = () => {
                     <button
                       className="w-full rounded-3xl bg-sky-500 py-3 font-semibold text-sm text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400"
                       onClick={() => router.push("/payment")}
+                      type="button"
                     >
                       Pay &amp; Rate Driver
                     </button>
                     <button
                       className="w-full rounded-3xl bg-[var(--surface-strong)] py-3 font-semibold text-[var(--foreground)] text-sm transition hover:bg-[var(--surface-muted)]"
                       onClick={resetBooking}
+                      type="button"
                     >
                       Book Another Ride
                     </button>

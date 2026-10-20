@@ -4,32 +4,32 @@ import maplibregl from "maplibre-gl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { FaClock, FaMapMarkerAlt, FaSignOutAlt, FaUser, FaLocationArrow } from "react-icons/fa";
+import { FaClock, FaMapMarkerAlt, FaSignOutAlt, FaUser } from "react-icons/fa";
 import { ChatBubble } from "@/components/ChatBubble";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMutation, useQuery } from "convex/react";
-import { useAuth } from "@/lib/authContext";
-import { useTheme } from "@/lib/themeContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
+import { useAuth } from "@/lib/authContext";
 import {
-  landmarks,
   CATEGORY_INFO,
-  MUNICIPALITY_LABELS,
   getLandmarksByMunicipality,
   type Landmark,
-  type LandmarkCategory,
+  landmarks,
+  MUNICIPALITY_LABELS,
   type Municipality,
 } from "@/lib/landmarks";
+import { type PlaceSuggestion, searchPlace } from "@/lib/mapClient";
+import { useTheme } from "@/lib/themeContext";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 
 interface Vehicle {
+  /** Fallback shown before the server quote arrives. */
+  basePrice: number;
   capacity: number;
   eta: string;
   icon: string;
   name: string;
-  /** Fallback shown before the server quote arrives. */
-  basePrice: number;
   type: "standard" | "priority";
 }
 
@@ -44,8 +44,10 @@ const MapPage = () => {
   const [dropoff, setDropoff] = useState("");
   const [pickupCoords, setPickupCoords] = useState({ lat: 0, lng: 0 });
   const [dropoffCoords, setDropoffCoords] = useState({ lat: 0, lng: 0 });
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [pickupSuggestions, setPickupSuggestions] = useState<any[]>([]);
+  const [_suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [pickupSuggestions, setPickupSuggestions] = useState<PlaceSuggestion[]>(
+    []
+  );
   const [step, setStep] = useState<
     "location" | "vehicle" | "booking" | "tracking"
   >("location");
@@ -61,7 +63,9 @@ const MapPage = () => {
   const [activeRideId, setActiveRideId] = useState<Id<"rides"> | null>(null);
   const [confirmedRide, setConfirmedRide] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  const [selectedMunicipality, setSelectedMunicipality] = useState<Municipality | "all">("all");
+  const [selectedMunicipality, setSelectedMunicipality] = useState<
+    Municipality | "all"
+  >("all");
   const [showLandmarkDropdown, setShowLandmarkDropdown] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -107,7 +111,9 @@ const MapPage = () => {
   // The fare is priced on the server. Coordinates are only known once both
   // addresses have been resolved, and the default of 0,0 is not a real point.
   const hasRoute =
-    pickupCoords.lat !== 0 && dropoffCoords.lat !== 0 && dropoffCoords.lng !== 0;
+    pickupCoords.lat !== 0 &&
+    dropoffCoords.lat !== 0 &&
+    dropoffCoords.lng !== 0;
 
   const fareQuote = useQuery(
     api.rides.getFareQuote,
@@ -135,9 +141,10 @@ const MapPage = () => {
       return;
     }
 
-    const mapStyle = theme === "dark"
-      ? "https://tiles.openfreemap.org/styles/dark"
-      : "https://tiles.openfreemap.org/styles/bright";
+    const mapStyle =
+      theme === "dark"
+        ? "https://tiles.openfreemap.org/styles/dark"
+        : "https://tiles.openfreemap.org/styles/bright";
 
     map.current = new maplibregl.Map({
       container: mapContainer.current,
@@ -147,9 +154,12 @@ const MapPage = () => {
     });
 
     map.current.on("load", () => {
-      if (!map.current) return;
+      if (!map.current) {
+        return;
+      }
 
-      landmarks.forEach((landmark) => {
+      const mapInstance = map.current;
+      for (const landmark of landmarks) {
         const categoryInfo = CATEGORY_INFO[landmark.category];
         const markerEl = document.createElement("div");
         markerEl.style.width = "28px";
@@ -166,21 +176,23 @@ const MapPage = () => {
         markerEl.style.zIndex = "10";
         markerEl.textContent = categoryInfo.icon;
 
-        const popup = new maplibregl.Popup({ offset: 25, closeButton: false })
-          .setHTML(
-            `<div style="font-family:system-ui;padding:4px;">
+        const popup = new maplibregl.Popup({
+          offset: 25,
+          closeButton: false,
+        }).setHTML(
+          `<div style="font-family:system-ui;padding:4px;">
               <strong style="font-size:13px;">${landmark.name}</strong><br/>
               <span style="color:#666;font-size:11px;">${MUNICIPALITY_LABELS[landmark.municipality]}</span>
             </div>`
-          );
+        );
 
         const marker = new maplibregl.Marker({ element: markerEl })
           .setLngLat([landmark.coordinates.lng, landmark.coordinates.lat])
           .setPopup(popup)
-          .addTo(map.current!);
+          .addTo(mapInstance);
 
         landmarkMarkersRef.current.push(marker);
-      });
+      }
     });
   }, [theme]);
 
@@ -234,7 +246,7 @@ const MapPage = () => {
       resetBooking();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRide?.status, confirmedRide]);
+  }, [activeRide?.status, confirmedRide, resetBooking, activeRide]);
 
   useEffect(() => {
     if (
@@ -253,21 +265,14 @@ const MapPage = () => {
   const handlePickupSearch = async (query: string) => {
     setPickup(query);
     if (query.length > 2) {
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${query}, Antique, Philippines`
-        );
-        const data = await response.json();
-        setPickupSuggestions(data.slice(0, 4));
-      } catch (error) {
-        console.error("Pickup search error:", error);
-      }
+      const results = await searchPlace(`${query}, Antique, Philippines`);
+      setPickupSuggestions(results.slice(0, 4));
     } else {
       setPickupSuggestions([]);
     }
   };
 
-  const handlePickupSelect = (place: any) => {
+  const handlePickupSelect = (place: PlaceSuggestion) => {
     setPickup(place.display_name);
     setPickupCoords({
       lat: Number.parseFloat(place.lat),
@@ -278,7 +283,7 @@ const MapPage = () => {
 
   const handleUseMyLocation = () => {
     console.log("Location button clicked");
-    
+
     if (!navigator.geolocation) {
       console.error("Geolocation not supported");
       setLocationError("Geolocation is not supported by your browser");
@@ -288,17 +293,17 @@ const MapPage = () => {
     console.log("Starting geolocation...");
     setIsLocating(true);
     setLocationError(null);
-    
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
         console.log("Location obtained:", position.coords);
         const { longitude, latitude } = position.coords;
         setPickupCoords({ lat: latitude, lng: longitude });
         setPickup(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
-        
+
         if (map.current) {
           map.current.flyTo({ center: [longitude, latitude], zoom: 14 });
-          
+
           if (userMarkerRef.current) {
             userMarkerRef.current.setLngLat([longitude, latitude]);
           } else {
@@ -319,10 +324,11 @@ const MapPage = () => {
       (error) => {
         console.error("Geolocation error:", error.code, error.message);
         setIsLocating(false);
-        
+
         let errorMessage = "Unable to get location";
         if (error.code === 1) {
-          errorMessage = "Location permission denied. Please allow location access in your browser settings.";
+          errorMessage =
+            "Location permission denied. Please allow location access in your browser settings.";
         } else if (error.code === 2) {
           errorMessage = "Location unavailable. Please try again.";
         } else if (error.code === 3) {
@@ -330,28 +336,21 @@ const MapPage = () => {
         }
         setLocationError(errorMessage);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
     );
   };
 
-  const handleSearch = async (query: string) => {
+  const _handleSearch = async (query: string) => {
     setDropoff(query);
     if (query.length > 2) {
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${query}, Antique, Philippines`
-        );
-        const data = await response.json();
-        setSuggestions(data.slice(0, 5));
-      } catch (error) {
-        console.error("Search error:", error);
-      }
+      const results = await searchPlace(`${query}, Antique, Philippines`);
+      setSuggestions(results.slice(0, 5));
     } else {
       setSuggestions([]);
     }
   };
 
-  const handleSelect = (place: any) => {
+  const _handleSelect = (place: PlaceSuggestion) => {
     setDropoff(place.display_name);
     setDropoffCoords({
       lat: Number.parseFloat(place.lat),
@@ -441,28 +440,38 @@ const MapPage = () => {
       {/* Mobile: Bottom navigation bar - Larger for touch */}
       <div className="fixed right-0 bottom-0 left-0 z-30 flex items-center justify-between border-[var(--border)] border-t bg-[var(--surface)]/95 px-4 py-3 backdrop-blur md:hidden">
         <Link
-          href="/Commuters/profile"
           className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2 ${
             theme === "light"
               ? "border-sky-600 bg-white text-slate-800"
               : "border-sky-400 bg-sky-700 text-white"
           }`}
+          href="/Commuters/profile"
         >
-          <div className={`flex h-10 w-10 items-center justify-center rounded-lg text-base ${
-            theme === "light" ? "bg-sky-100 text-sky-700" : "bg-sky-600 text-white"
-          }`}>
+          <div
+            className={`flex h-10 w-10 items-center justify-center rounded-lg text-base ${
+              theme === "light"
+                ? "bg-sky-100 text-sky-700"
+                : "bg-sky-600 text-white"
+            }`}
+          >
             <FaUser />
           </div>
-          <p className={`font-semibold text-base ${
-            theme === "light" ? "text-slate-900" : "text-white"
-          }`}>{displayName}</p>
+          <p
+            className={`font-semibold text-base ${
+              theme === "light" ? "text-slate-900" : "text-white"
+            }`}
+          >
+            {displayName}
+          </p>
         </Link>
         <div className="flex items-center gap-2">
-          <div className={`flex h-11 items-center justify-center rounded-xl border-2 px-2 ${
-            theme === "light"
-              ? "border-slate-300 bg-white"
-              : "border-slate-500 bg-slate-700"
-          }`}>
+          <div
+            className={`flex h-11 items-center justify-center rounded-xl border-2 px-2 ${
+              theme === "light"
+                ? "border-slate-300 bg-white"
+                : "border-slate-500 bg-slate-700"
+            }`}
+          >
             <ThemeToggle />
           </div>
           <button
@@ -528,37 +537,42 @@ const MapPage = () => {
                       value={pickup}
                     />
                     <button
+                      aria-label="Use my location"
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-opacity ${
                         theme === "light"
                           ? "border-slate-400 bg-white text-sky-600 hover:bg-sky-100"
                           : "border-slate-500 bg-slate-700 text-sky-400 hover:bg-slate-600"
                       }`}
-                      onClick={handleUseMyLocation}
                       disabled={isLocating}
-                      type="button"
+                      onClick={handleUseMyLocation}
                       title="Use my location"
-                      aria-label="Use my location"
+                      type="button"
                     >
                       {isLocating ? (
                         <div className="h-5 w-5 animate-spin rounded-full border-2 border-sky-500 border-t-transparent" />
                       ) : (
-                        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+                        <svg
+                          className="h-5 w-5"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <title>Locate me</title>
+                          <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
                         </svg>
                       )}
                     </button>
                   </div>
 
                   {locationError && (
-                    <div className="mb-2 rounded-lg bg-red-500/20 border border-red-500/50 px-3 py-2 text-sm text-red-400">
+                    <div className="mb-2 rounded-lg border border-red-500/50 bg-red-500/20 px-3 py-2 text-red-400 text-sm">
                       {locationError}
                     </div>
                   )}
 
-                  {pickupSuggestions.map((place, i) => (
+                  {pickupSuggestions.map((place) => (
                     <button
                       className="block w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-3 text-left text-[var(--foreground)] transition hover:border-[var(--border)] hover:bg-[var(--surface)]"
-                      key={i}
+                      key={place.place_id}
                       onClick={() => handlePickupSelect(place)}
                       type="button"
                     >
@@ -573,7 +587,9 @@ const MapPage = () => {
                     <div className="h-3 w-3 shrink-0 rounded-full bg-rose-400" />
                     <button
                       className="flex-1 border-[var(--border)] border-b bg-transparent pb-2 text-left text-[var(--foreground)] outline-none placeholder:text-[var(--text-muted)]"
-                      onClick={() => setShowLandmarkDropdown(!showLandmarkDropdown)}
+                      onClick={() =>
+                        setShowLandmarkDropdown(!showLandmarkDropdown)
+                      }
                       type="button"
                     >
                       {dropoff || "Select destination"}
@@ -586,12 +602,12 @@ const MapPage = () => {
                     <div className="flex gap-2">
                       {(["all", "sanJose", "sibalom"] as const).map((mun) => (
                         <button
-                          key={mun}
-                          className={`flex-1 rounded-full px-3 py-2 text-sm font-medium transition ${
+                          className={`flex-1 rounded-full px-3 py-2 font-medium text-sm transition ${
                             selectedMunicipality === mun
                               ? "bg-sky-500 text-white"
-                              : "bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)]"
+                              : "border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)]"
                           }`}
+                          key={mun}
                           onClick={() => setSelectedMunicipality(mun)}
                           type="button"
                         >
@@ -603,22 +619,25 @@ const MapPage = () => {
                     <div className="max-h-60 space-y-2 overflow-y-auto">
                       {filteredLandmarks.map((landmark) => (
                         <button
-                          key={landmark.id}
                           className="flex w-full items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-3 text-left text-[var(--foreground)] transition hover:border-sky-500 hover:bg-[var(--surface)]"
+                          key={landmark.id}
                           onClick={() => handleLandmarkSelect(landmark)}
                           type="button"
                         >
                           <div
                             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm"
-                            style={{ backgroundColor: CATEGORY_INFO[landmark.category].color }}
+                            style={{
+                              backgroundColor:
+                                CATEGORY_INFO[landmark.category].color,
+                            }}
                           >
                             {CATEGORY_INFO[landmark.category].icon}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium text-white">
+                            <div className="truncate font-medium text-sm text-white">
                               {landmark.name}
                             </div>
-                            <div className="text-xs text-[var(--text-muted)]">
+                            <div className="text-[var(--text-muted)] text-xs">
                               {MUNICIPALITY_LABELS[landmark.municipality]}
                             </div>
                           </div>
@@ -686,9 +705,9 @@ const MapPage = () => {
 
                 <button
                   className="mt-3 w-full rounded-2xl border-2 border-sky-500/50 bg-sky-600 py-4 font-bold text-base text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)]"
-                  disabled={!(
-                    selectedVehicle && commuter && sessionToken && fareQuote
-                  )}
+                  disabled={
+                    !(selectedVehicle && commuter && sessionToken && fareQuote)
+                  }
                   onClick={handleBookRide}
                   type="button"
                 >
