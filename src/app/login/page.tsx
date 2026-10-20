@@ -1,11 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { FaFacebookF, FaGoogle } from "react-icons/fa6";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/authContext";
+
+const ROLE_ROUTES: { prefix: string; role: string }[] = [
+  { prefix: "/admin", role: "admin" },
+  { prefix: "/operator", role: "operator" },
+  { prefix: "/map", role: "commuter" },
+  { prefix: "/profile", role: "commuter" },
+  { prefix: "/payment", role: "commuter" },
+  { prefix: "/feedback", role: "commuter" },
+];
+
+function isAllowedForRole(path: string, role: string): boolean {
+  const route = ROLE_ROUTES.find(
+    (candidate) =>
+      path === candidate.prefix || path.startsWith(`${candidate.prefix}/`)
+  );
+  return route?.role === role;
+}
 
 function routeForRole(role: string): string {
   if (role === "admin") {
@@ -23,15 +40,25 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, user } = useAuth();
   const { showToast } = useToast();
 
+  // The route the visitor was trying to reach before being sent here. It is
+  // only honoured when the signed-in role is allowed to use it.
+  const redirectTo = searchParams.get("redirect");
+
   // Redirect already-authenticated users away from the login page
   useEffect(() => {
-    if (user) {
-      router.replace(`/${routeForRole(user.role)}`);
+    if (!user) {
+      return;
     }
-  }, [user, router]);
+    if (redirectTo && isAllowedForRole(redirectTo, user.role)) {
+      router.replace(redirectTo);
+      return;
+    }
+    router.replace(`/${routeForRole(user.role)}`);
+  }, [user, redirectTo, router]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 import {
   FaChartLine,
   FaCog,
@@ -66,22 +65,8 @@ function rideStatusClass(status: string): string {
 
 export default function OperatorProfilePage() {
   const router = useRouter();
-  const { logout, user, isLoading: authLoading } = useAuth();
+  const { logout } = useAuth();
   const { showToast } = useToast();
-
-  useEffect(() => {
-    if (!(authLoading || user)) {
-      router.push("/login");
-      return;
-    }
-    if (!authLoading && user && user.role !== "operator") {
-      if (user.role === "admin") {
-        router.push("/admin");
-      } else {
-        router.push("/map");
-      }
-    }
-  }, [user, authLoading, router]);
 
   const handleCallRider = () => {
     window.location.href = "tel:+639123456789";

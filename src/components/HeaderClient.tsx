@@ -8,12 +8,7 @@ export default function HeaderClient() {
   const pathname = usePathname();
 
   // Full-screen map pages that have their own in-page floating header.
-  const fullScreenMapRoutes = new Set([
-    "/Commuters",
-    "/operator",
-    "/operator/map",
-    "/map",
-  ]);
+  const fullScreenMapRoutes = new Set(["/operator", "/operator/map", "/map"]);
 
   const hideGlobalHeader =
     pathname === "/" ||
@@ -28,7 +23,7 @@ export default function HeaderClient() {
 
   const isAdmin = pathname?.startsWith("/admin");
   const isOperator = pathname?.startsWith("/operator");
-  const isCommuter = pathname?.startsWith("/Commuters") || pathname === "/map";
+  const isCommuter = pathname === "/map" || pathname === "/profile";
 
   return (
     <header className="sticky top-0 z-50 border-[var(--border)] border-b bg-[var(--surface-strong)]/80 shadow-sm backdrop-blur-lg">

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   FaCog,
   FaCreditCard,
@@ -39,19 +39,9 @@ interface PaymentMethod {
 }
 
 export default function ProfilePage() {
-  const router = useRouter();
-  const { logout, user: authUser, isLoading: authLoading } = useAuth();
+  const _router = useRouter();
+  const { logout } = useAuth();
   const { showToast } = useToast();
-
-  useEffect(() => {
-    if (!(authLoading || authUser)) {
-      router.push("/login");
-      return;
-    }
-    if (!authLoading && authUser && authUser.role !== "commuter") {
-      router.push(authUser.role === "admin" ? "/admin" : "/operator");
-    }
-  }, [authUser, authLoading, router]);
 
   const [activeTab, setActiveTab] = useState<
     "profile" | "history" | "payment" | "settings"
@@ -135,7 +125,7 @@ export default function ProfilePage() {
           </div>
           <Link
             className="inline-flex w-fit items-center gap-2 rounded-full bg-sky-500 px-5 py-2.5 font-semibold text-sm text-white transition-colors hover:bg-sky-400"
-            href="/Commuters"
+            href="/map"
           >
             <FaMapMarkedAlt />
             Book Ride

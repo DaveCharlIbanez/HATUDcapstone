@@ -37,7 +37,7 @@
 
 ### Phase 2: Database Reset & Re-seed
 
-**Command:** `npx convex run seed:forceReset`
+**Command:** `npx convex run internal.seed.forceReset`
 
 This will:
 - Clear all existing rides
@@ -124,7 +124,7 @@ Update all vehicle types in seed data:
 ## Rollback Plan
 
 If issues occur:
-1. Run `npx convex run seed:forceReset` again
+1. Run `npx convex run internal.seed.forceReset` again
 2. Restore previous vehicle type literals in schema
 3. Restore previous frontend code
 

@@ -26,7 +26,6 @@ const STORAGE_KEY = "hatud_theme";
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { sessionToken } = useAuth();
   const [theme, setThemeState] = useState<Theme>("light");
-  const [mounted, setMounted] = useState(false);
 
   const themePreference = useQuery(
     api.theme.getUserTheme,
@@ -36,7 +35,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setUserTheme = useMutation(api.theme.setUserTheme);
 
   useEffect(() => {
-    setMounted(true);
     const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
     if (stored === "light" || stored === "dark") {
       setThemeState(stored);
@@ -74,10 +72,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setTheme(theme === "light" ? "dark" : "light");
   }, [theme, setTheme]);
 
-  if (!mounted) {
-    return <>{children}</>;
-  }
-
+  // The context is always provided. Gating it on `mounted` meant that any
+  // component calling `useTheme` threw during server rendering, which broke
+  // the static export of the not-found page.
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       {children}

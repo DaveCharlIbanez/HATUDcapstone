@@ -20,6 +20,7 @@ import { createMarkerElement } from "@/lib/mapMarkers";
 import { useTheme } from "@/lib/themeContext";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { CurrentRidePanel } from "./CurrentRidePanel";
 
 export default function OperatorMapPage() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -27,10 +28,10 @@ export default function OperatorMapPage() {
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
 
-  const { user, sessionToken, isLoading: authLoading } = useAuth();
+  const { sessionToken, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const { theme } = useTheme();
-  const router = useRouter();
+  const _router = useRouter();
 
   const operatorProfile = useQuery(
     api.operators.getSelf,
@@ -105,23 +106,6 @@ export default function OperatorMapPage() {
     }
     setShowChat(false);
   }, [authLoading, activeRide, activeRide?.status, sessionToken]);
-
-  // Role guard - redirect operators to main /operator page to avoid duplication
-  useEffect(() => {
-    if (!(authLoading || user)) {
-      router.push("/login");
-      return;
-    }
-    if (!authLoading && user) {
-      if (user.role === "operator") {
-        router.replace("/operator");
-      } else if (user.role === "admin") {
-        router.push("/admin");
-      } else {
-        router.push("/map");
-      }
-    }
-  }, [user, authLoading, router]);
 
   // Map init
   useEffect(() => {
@@ -618,59 +602,13 @@ export default function OperatorMapPage() {
 
       {/* Current Active Ride Panel — bottom bar */}
       {activeRide && (
-        <div className="absolute right-0 bottom-16 z-30 border-[var(--border)] border-t bg-[var(--surface)] p-3 md:bottom-0 md:p-4 md:p-6">
-          <div className="mx-auto max-w-lg">
-            <h3 className="mb-2 font-semibold text-[var(--foreground)] text-sm md:mb-3 md:text-base">
-              Current Ride
-            </h3>
-            <div className="rounded-xl bg-[var(--surface-strong)] p-3 md:rounded-2xl md:p-4">
-              <div className="mb-2 flex items-start justify-between gap-2 md:mb-3 md:flex-row">
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-[var(--foreground)] text-sm md:text-base">
-                    {activeRideCommuter?.name ?? "Loading..."}
-                  </p>
-                  <p className="line-clamp-1 text-[10px] text-[var(--text-muted)] md:text-sm">
-                    {activeRide.pickup.address} → {activeRide.dropoff.address}
-                  </p>
-                </div>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 font-semibold text-[10px] md:px-3 md:py-1 md:text-xs ${
-                    activeRide.status === "accepted"
-                      ? "bg-blue-500/20 text-blue-400"
-                      : "bg-yellow-500/20 text-yellow-400"
-                  }`}
-                >
-                  {activeRide.status === "accepted"
-                    ? "ACCEPTED"
-                    : "IN PROGRESS"}
-                </span>
-              </div>
-              <div className="flex gap-1.5 md:gap-2">
-                {activeRideCommuter?.phone && (
-                  <button
-                    className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-sky-600 px-2 py-1.5 text-white text-xs transition hover:bg-sky-500 md:gap-2 md:px-3 md:py-2.5 md:text-sm"
-                    onClick={() => handleCall(activeRideCommuter.phone)}
-                    type="button"
-                  >
-                    <FaPhone className="text-[10px] md:text-xs" />
-                    Call
-                  </button>
-                )}
-                <button
-                  className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-green-600 px-2 py-1.5 text-white text-xs transition hover:bg-green-500 md:gap-2 md:px-3 md:py-2.5 md:text-sm"
-                  onClick={
-                    activeRide.status === "accepted"
-                      ? handlePickedUp
-                      : handleCompleteRide
-                  }
-                  type="button"
-                >
-                  {activeRide.status === "accepted" ? "Picked Up" : "Complete"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <CurrentRidePanel
+          onCall={handleCall}
+          onComplete={handleCompleteRide}
+          onPickedUp={handlePickedUp}
+          partner={activeRideCommuter}
+          ride={activeRide}
+        />
       )}
 
       {showChat && activeRide && sessionToken && (

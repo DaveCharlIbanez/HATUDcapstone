@@ -2,23 +2,33 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
+import { FaSpinner } from "react-icons/fa";
 import { useAuth } from "@/lib/authContext";
 
-// Mirrors the list formerly enforced by src/middleware.ts. Middleware does not
-// run in a static export (Capacitor build), so protection is enforced here on
-// the client using the same auth state the app already validates against Convex.
-const PROTECTED_ROUTES = [
-  "/admin",
-  "/operator",
-  "/Commuters",
-  "/map",
-  "/payment",
-  "/feedback",
+/**
+ * The single client-side access gate.
+ *
+ * Middleware does not run in a static export (the Capacitor build), so route
+ * protection lives here. Each route declares the role it needs; anything not
+ * listed is open. Previously every page also carried its own `router.push`
+ * role effect, which meant three separate fences had to agree.
+ */
+const ROUTE_ROLES: {
+  prefix: string;
+  role?: "admin" | "operator" | "commuter";
+}[] = [
+  { prefix: "/admin", role: "admin" },
+  { prefix: "/operator", role: "operator" },
+  { prefix: "/map", role: "commuter" },
+  { prefix: "/profile", role: "commuter" },
+  { prefix: "/payment", role: "commuter" },
+  { prefix: "/feedback", role: "commuter" },
 ];
 
-function isProtected(pathname: string): boolean {
-  return PROTECTED_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
+function matchRoute(pathname: string) {
+  return ROUTE_ROLES.find(
+    (route) =>
+      pathname === route.prefix || pathname.startsWith(`${route.prefix}/`)
   );
 }
 
@@ -27,18 +37,29 @@ export function RouteGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { user, isLoading } = useAuth();
 
-  const protectedRoute = isProtected(pathname);
+  const route = matchRoute(pathname);
+  const requiredRole = route?.role;
 
   useEffect(() => {
-    if (protectedRoute && !isLoading && !user) {
-      const loginUrl = `/login?redirect=${encodeURIComponent(pathname)}`;
-      router.replace(loginUrl);
+    if (isLoading || !route) {
+      return;
     }
-  }, [protectedRoute, isLoading, user, pathname, router]);
+    if (!user) {
+      router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
+      return;
+    }
+    if (requiredRole && user.role !== requiredRole) {
+      router.replace(`/${user.role}`);
+    }
+  }, [isLoading, route, requiredRole, user, pathname, router]);
 
   // Avoid flashing protected content before auth resolves / redirect fires.
-  if (protectedRoute && (isLoading || !user)) {
-    return null;
+  if (route && (isLoading || !user)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
+        <FaSpinner className="animate-spin text-2xl text-sky-400" />
+      </div>
+    );
   }
 
   return <>{children}</>;

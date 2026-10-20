@@ -1,21 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import { FiMoon, FiSun } from "react-icons/fi";
 import { useTheme } from "@/lib/themeContext";
 
 export function ThemeSlider() {
+  // The provider always exposes a theme, so there is no need for a local
+  // mounted flag (and no setState during render).
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  if (!mounted) {
-    setMounted(true);
-  }
-
-  const currentTheme = mounted ? theme : "light";
 
   const handleToggle = () => {
-    setTheme(currentTheme === "light" ? "dark" : "light");
+    setTheme(theme === "light" ? "dark" : "light");
   };
 
   return (
@@ -23,12 +17,12 @@ export function ThemeSlider() {
       <div>
         <h3 className="font-semibold text-[var(--foreground)]">Dark Mode</h3>
         <p className="text-[var(--text-muted)] text-sm">
-          {currentTheme === "dark" ? "Currently enabled" : "Currently disabled"}
+          {theme === "dark" ? "Currently enabled" : "Currently disabled"}
         </p>
       </div>
       <button
-        aria-checked={currentTheme === "dark"}
-        aria-label={`Switch to ${currentTheme === "light" ? "dark" : "light"} mode`}
+        aria-checked={theme === "dark"}
+        aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
         className="relative flex h-12 w-24 items-center rounded-full bg-[var(--surface-muted)] p-1 transition-colors hover:bg-[var(--surface-strong)]"
         onClick={handleToggle}
         role="switch"
@@ -36,10 +30,10 @@ export function ThemeSlider() {
       >
         <span
           className={`flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] shadow-lg transition-transform duration-200 ${
-            currentTheme === "dark" ? "translate-x-12" : "translate-x-0"
+            theme === "dark" ? "translate-x-12" : "translate-x-0"
           }`}
         >
-          {currentTheme === "light" ? (
+          {theme === "light" ? (
             <FiSun className="h-5 w-5 text-white" />
           ) : (
             <FiMoon className="h-5 w-5 text-white" />
@@ -48,7 +42,7 @@ export function ThemeSlider() {
         <span className="absolute flex w-full justify-between px-2 font-medium text-xs">
           <span
             className={
-              currentTheme === "light"
+              theme === "light"
                 ? "text-[var(--foreground)]"
                 : "text-[var(--text-muted)]"
             }
@@ -57,7 +51,7 @@ export function ThemeSlider() {
           </span>
           <span
             className={
-              currentTheme === "dark"
+              theme === "dark"
                 ? "text-[var(--foreground)]"
                 : "text-[var(--text-muted)]"
             }

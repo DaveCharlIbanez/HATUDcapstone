@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   FaChartLine,
   FaClipboardList,
@@ -39,15 +39,6 @@ export default function AdminPage() {
     api.adminQueries.getAllRides,
     sessionToken ? { sessionToken } : "skip"
   );
-
-  useEffect(() => {
-    if (!(authLoading || user)) {
-      router.push("/login");
-    } else if (!authLoading && user && user.role !== "admin") {
-      const targetRoute = user.role === "operator" ? "/operator" : "/map";
-      router.push(targetRoute);
-    }
-  }, [user, authLoading, router]);
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({
