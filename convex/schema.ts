@@ -158,7 +158,11 @@ export default defineSchema({
   messages: defineTable({
     rideId: v.id("rides"),
     senderId: v.id("users"),
-    senderRole: v.union(v.literal("commuter"), v.literal("operator")),
+    senderRole: v.union(
+      v.literal("commuter"),
+      v.literal("operator"),
+      v.literal("admin")
+    ),
     content: v.string(),
     read: v.boolean(),
     createdAt: v.number(),

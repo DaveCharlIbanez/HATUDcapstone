@@ -50,32 +50,37 @@ const CommutersPage = () => {
   const [confirmedRide, setConfirmedRide] = useState(false);
   const [showChat, setShowChat] = useState(false);
 
-  // Resolve commuter profile from userId
+  // The signed-in passenger's own profile
   const commuter = useQuery(
-    api.commuters.getByUserId,
-    user ? { userId: user.userId as Id<"users"> } : "skip"
+    api.commuters.getSelf,
+    sessionToken ? { sessionToken } : "skip"
   );
 
   // Real-time subscription to the commuter's current active ride
-  const activeRide = useQuery(
-    api.rides.getActiveByCommuter,
-    commuter ? { commuterId: commuter._id } : "skip"
+  const activeTrip = useQuery(
+    api.rides.getActiveForMe,
+    sessionToken ? { sessionToken } : "skip"
   );
+  const activeRide = activeTrip?.ride ?? null;
 
   // Fetch operator info once a ride is accepted
-  const matchedOperator = useQuery(
-    api.operators.getById,
-    activeRide?.operatorId ? { id: activeRide.operatorId } : "skip"
-  );
+  const matchedOperator =
+    activeTrip?.partner?.kind === "operator" ? activeTrip.partner : null;
 
   const createRide = useMutation(api.rides.create);
   const cancelRide = useMutation(api.rides.cancel);
   const updateCommuterLocationMutation = useMutation(api.rides.updateCommuterLocation);
 
-  const operatorLocation = useQuery(
-    api.rides.getOperatorLocation,
-    activeRide ? { rideId: activeRide._id } : "skip"
+  const partnerLocation = useQuery(
+    api.rides.getPartnerLocation,
+    sessionToken && activeRide
+      ? { sessionToken, rideId: activeRide._id }
+      : "skip"
   );
+  const operatorLocation =
+    partnerLocation && "operatorLocation" in partnerLocation
+      ? partnerLocation.operatorLocation
+      : null;
 
   const operatorMarkerRef = useRef<maplibregl.Marker | null>(null);
   const routeLayerId = "route-line";

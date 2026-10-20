@@ -1,44 +1,39 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireCommuterOwnership } from "./lib/withAuth";
+import { requireCommuterOwnership, resolveActor } from "./lib/withAuth";
 
-export const getById = query({
-  args: { id: v.id("feedback") },
-  handler: async (ctx, args) => await ctx.db.get(args.id),
-});
+// Feedback rows are only readable by the passenger who wrote them or by the
+// driver being rated. The old by-id / by-ride / by-operator lookups were
+// unauthenticated and had no callers.
 
-export const getByRideId = query({
-  args: { rideId: v.id("rides") },
-  handler: async (ctx, args) =>
-    await ctx.db
-      .query("feedback")
-      .withIndex("by_rideId", (q) => q.eq("rideId", args.rideId))
-      .first(),
-});
-
-export const getByOperator = query({
-  args: { operatorId: v.id("operators") },
-  handler: async (ctx, args) =>
-    await ctx.db
-      .query("feedback")
-      .withIndex("by_operatorId", (q) => q.eq("operatorId", args.operatorId))
-      .collect(),
-});
-
-export const getOperatorAverageRating = query({
-  args: { operatorId: v.id("operators") },
+/**
+ * The caller's own average rating as a driver. Drivers and admins only.
+ */
+export const getAverageForOperator = query({
+  args: {
+    sessionToken: v.string(),
+    operatorId: v.id("operators"),
+  },
   handler: async (ctx, args) => {
-    const feedbacks = await ctx.db
+    const actor = await resolveActor(ctx, args.sessionToken);
+    if (actor.role !== "admin" && actor.operatorId !== args.operatorId) {
+      throw new Error("Forbidden: you do not own this operator profile");
+    }
+
+    const feedback = await ctx.db
       .query("feedback")
       .withIndex("by_operatorId", (q) => q.eq("operatorId", args.operatorId))
       .collect();
 
-    if (feedbacks.length === 0) {
-      return null;
+    if (feedback.length === 0) {
+      return { average: 0, count: 0 };
     }
 
-    const total = feedbacks.reduce((sum, f) => sum + f.rating, 0);
-    return total / feedbacks.length;
+    const total = feedback.reduce((sum, row) => sum + row.rating, 0);
+    return {
+      average: Math.round((total / feedback.length) * 10) / 10,
+      count: feedback.length,
+    };
   },
 });
 
@@ -47,7 +42,6 @@ export const create = mutation({
     sessionToken: v.string(),
     rideId: v.id("rides"),
     commuterId: v.id("commuters"),
-    operatorId: v.id("operators"),
     rating: v.number(),
     comment: v.optional(v.string()),
   },
@@ -64,6 +58,14 @@ export const create = mutation({
       throw new Error("Forbidden: this ride does not belong to your account");
     }
 
+    if (ride.status !== "completed") {
+      throw new Error("Feedback can only be left for a completed ride");
+    }
+
+    if (!ride.operatorId) {
+      throw new Error("This ride has no driver to rate");
+    }
+
     const existing = await ctx.db
       .query("feedback")
       .withIndex("by_rideId", (q) => q.eq("rideId", args.rideId))
@@ -76,7 +78,8 @@ export const create = mutation({
     return await ctx.db.insert("feedback", {
       rideId: args.rideId,
       commuterId: args.commuterId,
-      operatorId: args.operatorId,
+      // Derived from the ride, never from the client.
+      operatorId: ride.operatorId,
       rating: args.rating,
       comment: args.comment,
       createdAt: Date.now(),
@@ -103,7 +106,7 @@ export const update = mutation({
       throw new Error("Rating must be between 1 and 5");
     }
 
-    const updates: Record<string, unknown> = {};
+    const updates: { rating?: number; comment?: string } = {};
     if (args.rating !== undefined) {
       updates.rating = args.rating;
     }

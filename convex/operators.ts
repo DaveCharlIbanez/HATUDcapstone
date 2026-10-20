@@ -1,87 +1,120 @@
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
-import { requireOperatorOwnership } from "./lib/withAuth";
+import { mutation, query } from "./_generated/server";
+import {
+  requireOperatorVisibleOrLegacy,
+  requireRoleOrLegacy,
+  requireSelfOrLegacy,
+} from "./lib/legacyAccess";
+import {
+  projectOperatorForCounterpart,
+  projectOperatorPublic,
+  projectOperatorSelf,
+} from "./lib/projections";
+import {
+  requireOperatorOwnership,
+  requireRideParticipant,
+  resolveActor,
+} from "./lib/withAuth";
+
+// ─── Scoped queries ───────────────────────────────────────────────────────────
+
+/**
+ * The caller's own operator profile, including the fields only they may see
+ * (licence number, phone, live position).
+ */
+export const getSelf = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await resolveActor(ctx, args.sessionToken);
+    if (actor.role !== "operator" || !actor.operatorId) {
+      throw new Error("Forbidden: not an operator");
+    }
+    const operator = await ctx.db.get(actor.operatorId);
+    if (!operator) {
+      throw new Error("Operator profile not found");
+    }
+    return projectOperatorSelf(operator);
+  },
+});
+
+/**
+ * The driver on a ride the caller takes part in. The passenger never sees the
+ * driver's licence number, phone number or live position.
+ */
+export const getForRide = query({
+  args: { sessionToken: v.string(), rideId: v.id("rides") },
+  handler: async (ctx, args) => {
+    const { ride } = await requireRideParticipant(
+      ctx,
+      args.sessionToken,
+      args.rideId
+    );
+    if (!ride.operatorId) {
+      return null;
+    }
+    const operator = await ctx.db.get(ride.operatorId);
+    if (!operator) {
+      return null;
+    }
+    return projectOperatorForCounterpart(operator);
+  },
+});
+
+/**
+ * The roster of drivers currently taking rides. Drivers and admins only.
+ */
+export const listAvailable = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireRoleOrLegacy(ctx, args.sessionToken, "operator");
+    const operators = await ctx.db
+      .query("operators")
+      .withIndex("by_isAvailable", (q) => q.eq("isAvailable", true))
+      .collect();
+    return operators.map(projectOperatorPublic);
+  },
+});
+
+// ─── Legacy compatibility ─────────────────────────────────────────────────────
+// Superseded by getSelf / getForRide. Kept only for the Android builds that
+// predate session-token auth. See convex/lib/legacyAccess.ts.
 
 export const getByUserId = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) =>
-    await ctx.db
+  args: {
+    userId: v.id("users"),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireSelfOrLegacy(ctx, args.sessionToken, args.userId);
+    const operator = await ctx.db
       .query("operators")
       .withIndex("by_userId", (q) => q.eq("userId", args.userId))
-      .first(),
+      .first();
+    if (!operator) {
+      return null;
+    }
+    return args.sessionToken
+      ? projectOperatorSelf(operator)
+      : projectOperatorPublic(operator);
+  },
 });
 
 export const getById = query({
-  args: { id: v.id("operators") },
-  handler: async (ctx, args) => await ctx.db.get(args.id),
-});
-
-export const getByLicense = query({
-  args: { licenseNumber: v.string() },
-  handler: async (ctx, args) =>
-    await ctx.db
-      .query("operators")
-      .withIndex("by_license", (q) => q.eq("licenseNumber", args.licenseNumber))
-      .first(),
-});
-
-export const listAvailable = query({
-  args: {},
-  handler: async (ctx) =>
-    await ctx.db
-      .query("operators")
-      .withIndex("by_isAvailable", (q) => q.eq("isAvailable", true))
-      .collect(),
-});
-
-// Internal only — called by auth.signup, not directly by clients
-export const create = internalMutation({
   args: {
-    userId: v.id("users"),
-    name: v.string(),
-    email: v.string(),
-    phone: v.string(),
-    licenseNumber: v.string(),
-    vehicleInfo: v.object({
-      plateNumber: v.string(),
-      model: v.string(),
-      color: v.string(),
-    }),
+    id: v.id("operators"),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("operators")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
-      .first();
-
-    if (existing) {
-      throw new Error("Operator profile already exists for this user");
+    await requireOperatorVisibleOrLegacy(ctx, args.sessionToken, args.id);
+    const operator = await ctx.db.get(args.id);
+    if (!operator) {
+      return null;
     }
-
-    const existingLicense = await ctx.db
-      .query("operators")
-      .withIndex("by_license", (q) => q.eq("licenseNumber", args.licenseNumber))
-      .first();
-
-    if (existingLicense) {
-      throw new Error("Operator with this license number already exists");
-    }
-
-    const now = Date.now();
-    return await ctx.db.insert("operators", {
-      userId: args.userId,
-      name: args.name,
-      email: args.email,
-      phone: args.phone,
-      licenseNumber: args.licenseNumber,
-      vehicleInfo: args.vehicleInfo,
-      isAvailable: false,
-      currentLocation: undefined,
-      createdAt: now,
-      updatedAt: now,
-    });
+    return projectOperatorForCounterpart(operator);
   },
 });
+
+// ─── Mutations ────────────────────────────────────────────────────────────────
 
 export const setAvailability = mutation({
   args: {
@@ -98,11 +131,19 @@ export const setAvailability = mutation({
   handler: async (ctx, args) => {
     await requireOperatorOwnership(ctx, args.sessionToken, args.id);
 
-    await ctx.db.patch(args.id, {
-      isAvailable: args.isAvailable,
-      currentLocation: args.currentLocation,
-      updatedAt: Date.now(),
-    });
+    const patch: {
+      isAvailable: boolean;
+      currentLocation?: { latitude: number; longitude: number };
+      updatedAt: number;
+    } = { isAvailable: args.isAvailable, updatedAt: Date.now() };
+
+    // Only overwrite the stored position when one was supplied — patching an
+    // absent value would wipe the driver's last known location.
+    if (args.currentLocation !== undefined) {
+      patch.currentLocation = args.currentLocation;
+    }
+
+    await ctx.db.patch(args.id, patch);
   },
 });
 
@@ -147,7 +188,12 @@ export const update = mutation({
       throw new Error("Operator not found");
     }
 
-    const updates: Record<string, unknown> = { updatedAt: Date.now() };
+    const updates: {
+      name?: string;
+      phone?: string;
+      vehicleInfo?: { plateNumber: string; model: string; color: string };
+      updatedAt: number;
+    } = { updatedAt: Date.now() };
     if (args.name !== undefined) {
       updates.name = args.name;
     }

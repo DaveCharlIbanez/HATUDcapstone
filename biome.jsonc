@@ -21,6 +21,19 @@
     "enabled": true,
     "rules": {
       "recommended": true,
+      "style": {
+        // The app follows the Next.js ecosystem convention (camelCase for
+        // modules, PascalCase for components). Ultracite's default is
+        // kebab-case, which would force a rename of every file that carries a
+        // relative import into convex/_generated.
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "filenameCases": ["camelCase", "PascalCase"],
+            "strictCase": false
+          }
+        }
+      },
       "nursery": {
         "useSortedClasses": {
           "level": "warn",

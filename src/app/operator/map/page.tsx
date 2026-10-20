@@ -30,28 +30,36 @@ export default function OperatorMapPage() {
   const router = useRouter();
 
   const operatorProfile = useQuery(
-    api.operators.getByUserId,
-    user ? { userId: user.userId as Id<"users"> } : "skip"
+    api.operators.getSelf,
+    sessionToken ? { sessionToken } : "skip"
   );
-  const pendingRides = useQuery(api.rides.listPendingWithCommuter);
-  const activeRide = useQuery(
-    api.rides.getActiveByOperator,
-    operatorProfile ? { operatorId: operatorProfile._id } : "skip"
+  const pendingRides = useQuery(
+    api.rides.listPendingWithCommuter,
+    sessionToken ? { sessionToken } : "skip"
   );
-  const activeRideCommuter = useQuery(
-    api.commuters.getById,
-    activeRide?.commuterId ? { id: activeRide.commuterId } : "skip"
+  const activeTrip = useQuery(
+    api.rides.getActiveForMe,
+    sessionToken ? { sessionToken } : "skip"
   );
+  const activeRide = activeTrip?.ride ?? null;
+  const activeRideCommuter =
+    activeTrip?.partner?.kind === "commuter" ? activeTrip.partner : null;
 
   const acceptRideMutation = useMutation(api.rides.accept);
   const updateRideStatusMutation = useMutation(api.rides.updateStatus);
   const completeRideMutation = useMutation(api.rides.complete);
   const updateOperatorLocationMutation = useMutation(api.rides.updateOperatorLocation);
 
-  const commuterLocation = useQuery(
-    api.rides.getCommuterLocation,
-    activeRide ? { rideId: activeRide._id } : "skip"
+  const partnerLocation = useQuery(
+    api.rides.getPartnerLocation,
+    sessionToken && activeRide
+      ? { sessionToken, rideId: activeRide._id }
+      : "skip"
   );
+  const commuterLocation =
+    partnerLocation && "commuterLocation" in partnerLocation
+      ? partnerLocation.commuterLocation
+      : null;
 
   const commuterMarkerRef = useRef<maplibregl.Marker | null>(null);
   const routeLayerId = "route-line";

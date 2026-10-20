@@ -13,13 +13,15 @@ import type * as admins from "../admins.js";
 import type * as auth from "../auth.js";
 import type * as commuters from "../commuters.js";
 import type * as feedback from "../feedback.js";
+import type * as lib_legacyAccess from "../lib/legacyAccess.js";
+import type * as lib_password from "../lib/password.js";
+import type * as lib_projections from "../lib/projections.js";
 import type * as lib_withAuth from "../lib/withAuth.js";
 import type * as messages from "../messages.js";
 import type * as operators from "../operators.js";
 import type * as rides from "../rides.js";
 import type * as seed from "../seed.js";
 import type * as theme from "../theme.js";
-import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -33,13 +35,15 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   commuters: typeof commuters;
   feedback: typeof feedback;
+  "lib/legacyAccess": typeof lib_legacyAccess;
+  "lib/password": typeof lib_password;
+  "lib/projections": typeof lib_projections;
   "lib/withAuth": typeof lib_withAuth;
   messages: typeof messages;
   operators: typeof operators;
   rides: typeof rides;
   seed: typeof seed;
   theme: typeof theme;
-  users: typeof users;
 }>;
 
 /**

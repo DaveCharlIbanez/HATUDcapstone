@@ -1,34 +1,10 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation } from "./_generated/server";
 import { requireRole } from "./lib/withAuth";
 
-export const getByUserId = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) =>
-    await ctx.db
-      .query("admins")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
-      .first(),
-});
-
-export const getById = query({
-  args: { id: v.id("admins") },
-  handler: async (ctx, args) => await ctx.db.get(args.id),
-});
-
-export const getByEmail = query({
-  args: { email: v.string() },
-  handler: async (ctx, args) =>
-    await ctx.db
-      .query("admins")
-      .withIndex("by_email", (q) => q.eq("email", args.email))
-      .first(),
-});
-
-export const listAll = query({
-  args: {},
-  handler: async (ctx) => await ctx.db.query("admins").collect(),
-});
+// Admin profiles are only readable through the admin dashboard queries in
+// `adminQueries.ts`. The by-id / by-email / list-all lookups that used to live
+// here were unauthenticated enumeration points and had no callers.
 
 // Requires an existing admin session — prevents privilege escalation
 export const create = mutation({
@@ -82,7 +58,11 @@ export const update = mutation({
       throw new Error("Admin not found");
     }
 
-    const updates: Record<string, unknown> = { updatedAt: Date.now() };
+    const updates: {
+      name?: string;
+      permissions?: string[];
+      updatedAt: number;
+    } = { updatedAt: Date.now() };
     if (args.name !== undefined) {
       updates.name = args.name;
     }
@@ -91,19 +71,5 @@ export const update = mutation({
     }
 
     await ctx.db.patch(args.id, updates);
-  },
-});
-
-export const hasPermission = query({
-  args: {
-    id: v.id("admins"),
-    permission: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const admin = await ctx.db.get(args.id);
-    if (!admin) {
-      return false;
-    }
-    return admin.permissions.includes(args.permission);
   },
 });

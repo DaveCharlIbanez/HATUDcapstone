@@ -1,81 +1,164 @@
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import {
+  requireRideAccessOrLegacy,
+  requireRoleOrLegacy,
+  requireSelfOrLegacy,
+} from "./lib/legacyAccess";
+import {
+  projectCommuterForCounterpart,
+  projectOperatorForCounterpart,
+} from "./lib/projections";
 import {
   requireAuth,
   requireCommuterOwnership,
   requireOperatorOwnership,
+  requireRideParticipant,
+  resolveActor,
 } from "./lib/withAuth";
 
-export const getById = query({
-  args: { id: v.id("rides") },
-  handler: async (ctx, args) => await ctx.db.get(args.id),
-});
+// ─── Scoped queries ───────────────────────────────────────────────────────────
 
-export const listByCommuter = query({
-  args: { commuterId: v.id("commuters") },
-  handler: async (ctx, args) =>
-    await ctx.db
-      .query("rides")
-      .withIndex("by_commuterId", (q) => q.eq("commuterId", args.commuterId))
-      .collect(),
-});
+export type RideStatus =
+  | "pending"
+  | "accepted"
+  | "inProgress"
+  | "completed"
+  | "cancelled";
 
-export const listByOperator = query({
-  args: { operatorId: v.id("operators") },
-  handler: async (ctx, args) =>
-    await ctx.db
-      .query("rides")
-      .withIndex("by_operatorId", (q) => q.eq("operatorId", args.operatorId))
-      .collect(),
-});
+const rideStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("accepted"),
+  v.literal("inProgress"),
+  v.literal("completed"),
+  v.literal("cancelled")
+);
 
-export const listByStatus = query({
-  args: {
-    status: v.union(
-      v.literal("pending"),
-      v.literal("accepted"),
-      v.literal("inProgress"),
-      v.literal("completed"),
-      v.literal("cancelled")
-    ),
+export type ActiveRidePartner =
+  | ({ kind: "operator" } & ReturnType<typeof projectOperatorForCounterpart>)
+  | ({ kind: "commuter" } & ReturnType<typeof projectCommuterForCounterpart>);
+
+/**
+ * The caller's own in-flight ride, together with a projected view of the
+ * other party. The id of the counterpart is never taken from the client — it
+ * is derived from the ride the caller actually owns.
+ */
+export const getActiveForMe = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await resolveActor(ctx, args.sessionToken);
+
+    if (actor.role === "commuter") {
+      if (!actor.commuterId) {
+        return null;
+      }
+      const ride = await findActiveCommuterRide(ctx, actor.commuterId);
+      if (!ride) {
+        return null;
+      }
+      const operator = ride.operatorId
+        ? await ctx.db.get(ride.operatorId)
+        : null;
+      const partner = operator
+        ? {
+            kind: "operator" as const,
+            ...projectOperatorForCounterpart(operator),
+          }
+        : null;
+      return { ride, partner };
+    }
+
+    if (actor.role === "operator") {
+      if (!actor.operatorId) {
+        return null;
+      }
+      const ride = await findActiveOperatorRide(ctx, actor.operatorId);
+      if (!ride) {
+        return null;
+      }
+      const commuter = await ctx.db.get(ride.commuterId);
+      const partner = commuter
+        ? {
+            kind: "commuter" as const,
+            ...projectCommuterForCounterpart(commuter),
+          }
+        : null;
+      return { ride, partner };
+    }
+
+    throw new Error("Forbidden: this role does not have an active ride");
   },
-  handler: async (ctx, args) =>
-    await ctx.db
-      .query("rides")
-      .withIndex("by_status", (q) => q.eq("status", args.status))
-      .collect(),
 });
 
-export const listPending = query({
-  args: {},
-  handler: async (ctx) =>
-    await ctx.db
-      .query("rides")
-      .withIndex("by_status", (q) => q.eq("status", "pending"))
-      .collect(),
+/**
+ * The live position of the other party on a ride the caller takes part in.
+ */
+export const getPartnerLocation = query({
+  args: { sessionToken: v.string(), rideId: v.id("rides") },
+  handler: async (ctx, args) => {
+    const { actor, ride } = await requireRideParticipant(
+      ctx,
+      args.sessionToken,
+      args.rideId
+    );
+
+    if (actor.role === "admin") {
+      return {
+        operatorLocation: ride.operatorLocation ?? null,
+        commuterLocation: ride.commuterLocation ?? null,
+      };
+    }
+
+    if (actor.role === "commuter") {
+      return { operatorLocation: ride.operatorLocation ?? null };
+    }
+
+    return { commuterLocation: ride.commuterLocation ?? null };
+  },
 });
+
+// ─── Legacy compatibility ─────────────────────────────────────────────────────
+// Superseded by getActiveForMe / getPartnerLocation. Kept only for the Android
+// builds that predate session-token auth. See convex/lib/legacyAccess.ts.
 
 export const listPendingWithCommuter = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireRoleOrLegacy(ctx, args.sessionToken, "operator");
+
     const pendingRides = await ctx.db
       .query("rides")
       .withIndex("by_status", (q) => q.eq("status", "pending"))
       .order("desc")
       .collect();
 
-    return await Promise.all(
+    const withCommuter = await Promise.all(
       pendingRides.map(async (ride) => {
         const commuter = await ctx.db.get(ride.commuterId);
-        return { ...ride, commuter };
+        return {
+          ...ride,
+          commuter: commuter ? projectCommuterForCounterpart(commuter) : null,
+        };
       })
     );
+
+    return withCommuter;
   },
 });
 
 export const getActiveByCommuter = query({
-  args: { commuterId: v.id("commuters") },
+  args: {
+    commuterId: v.id("commuters"),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
+    const commuter = await ctx.db.get(args.commuterId);
+    if (!commuter) {
+      return null;
+    }
+    await requireSelfOrLegacy(ctx, args.sessionToken, commuter.userId);
     const rides = await ctx.db
       .query("rides")
       .withIndex("by_commuterId", (q) => q.eq("commuterId", args.commuterId))
@@ -93,8 +176,16 @@ export const getActiveByCommuter = query({
 });
 
 export const getActiveByOperator = query({
-  args: { operatorId: v.id("operators") },
+  args: {
+    operatorId: v.id("operators"),
+    sessionToken: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
+    const operator = await ctx.db.get(args.operatorId);
+    if (!operator) {
+      return null;
+    }
+    await requireSelfOrLegacy(ctx, args.sessionToken, operator.userId);
     const rides = await ctx.db
       .query("rides")
       .withIndex("by_operatorId", (q) => q.eq("operatorId", args.operatorId))
@@ -106,6 +197,38 @@ export const getActiveByOperator = query({
     );
   },
 });
+
+export const getOperatorLocation = query({
+  args: {
+    rideId: v.id("rides"),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { ride } = await requireRideAccessOrLegacy(
+      ctx,
+      args.sessionToken,
+      args.rideId
+    );
+    return ride.operatorLocation ?? null;
+  },
+});
+
+export const getCommuterLocation = query({
+  args: {
+    rideId: v.id("rides"),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { ride } = await requireRideAccessOrLegacy(
+      ctx,
+      args.sessionToken,
+      args.rideId
+    );
+    return ride.commuterLocation ?? null;
+  },
+});
+
+// ─── Mutations ────────────────────────────────────────────────────────────────
 
 export const create = mutation({
   args: {
@@ -147,13 +270,7 @@ export const updateStatus = mutation({
   args: {
     sessionToken: v.string(),
     id: v.id("rides"),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("accepted"),
-      v.literal("inProgress"),
-      v.literal("completed"),
-      v.literal("cancelled")
-    ),
+    status: rideStatusValidator,
   },
   handler: async (ctx, args) => {
     const { userId, role } = await requireAuth(ctx, args.sessionToken);
@@ -164,12 +281,7 @@ export const updateStatus = mutation({
     }
 
     // Role-based status whitelist
-    const allowed =
-      role === "admin"
-        ? ["pending", "accepted", "inProgress", "completed", "cancelled"]
-        : role === "operator"
-          ? ["accepted", "inProgress", "completed"]
-          : ["cancelled"];
+    const allowed = allowedStatusesFor(role);
 
     if (!allowed.includes(args.status)) {
       throw new Error(`Forbidden: ${role} cannot set status to ${args.status}`);
@@ -378,24 +490,60 @@ export const updateCommuterLocation = mutation({
   },
 });
 
-export const getOperatorLocation = query({
-  args: { rideId: v.id("rides") },
-  handler: async (ctx, args) => {
-    const ride = await ctx.db.get(args.rideId);
-    if (!ride) {
-      return null;
-    }
-    return ride.operatorLocation ?? null;
-  },
-});
+// ─── Internal helpers ─────────────────────────────────────────────────────────
 
-export const getCommuterLocation = query({
-  args: { rideId: v.id("rides") },
-  handler: async (ctx, args) => {
-    const ride = await ctx.db.get(args.rideId);
-    if (!ride) {
-      return null;
-    }
-    return ride.commuterLocation ?? null;
-  },
-});
+const ADMIN_STATUSES: RideStatus[] = [
+  "pending",
+  "accepted",
+  "inProgress",
+  "completed",
+  "cancelled",
+];
+const OPERATOR_STATUSES: RideStatus[] = ["accepted", "inProgress", "completed"];
+const COMMUTER_STATUSES: RideStatus[] = ["cancelled"];
+
+function allowedStatusesFor(
+  role: "commuter" | "operator" | "admin"
+): RideStatus[] {
+  if (role === "admin") {
+    return ADMIN_STATUSES;
+  }
+  if (role === "operator") {
+    return OPERATOR_STATUSES;
+  }
+  return COMMUTER_STATUSES;
+}
+
+async function findActiveCommuterRide(
+  ctx: QueryCtx,
+  commuterId: Id<"commuters">
+) {
+  const rides = await ctx.db
+    .query("rides")
+    .withIndex("by_commuterId", (q) => q.eq("commuterId", commuterId))
+    .order("desc")
+    .collect();
+  return (
+    rides.find(
+      (r) =>
+        r.status === "pending" ||
+        r.status === "accepted" ||
+        r.status === "inProgress"
+    ) ?? null
+  );
+}
+
+async function findActiveOperatorRide(
+  ctx: QueryCtx,
+  operatorId: Id<"operators">
+) {
+  const rides = await ctx.db
+    .query("rides")
+    .withIndex("by_operatorId", (q) => q.eq("operatorId", operatorId))
+    .order("desc")
+    .collect();
+  return (
+    rides.find((r) => r.status === "accepted" || r.status === "inProgress") ??
+    null
+  );
+}

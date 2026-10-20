@@ -68,19 +68,18 @@ const MapPage = () => {
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   const commuter = useQuery(
-    api.commuters.getByUserId,
-    user ? { userId: user.userId as Id<"users"> } : "skip"
+    api.commuters.getSelf,
+    sessionToken ? { sessionToken } : "skip"
   );
 
-  const activeRide = useQuery(
-    api.rides.getActiveByCommuter,
-    commuter ? { commuterId: commuter._id } : "skip"
+  const activeTrip = useQuery(
+    api.rides.getActiveForMe,
+    sessionToken ? { sessionToken } : "skip"
   );
+  const activeRide = activeTrip?.ride ?? null;
 
-  const matchedOperator = useQuery(
-    api.operators.getById,
-    activeRide?.operatorId ? { id: activeRide.operatorId } : "skip"
-  );
+  const matchedOperator =
+    activeTrip?.partner?.kind === "operator" ? activeTrip.partner : null;
 
   const createRide = useMutation(api.rides.create);
   const cancelRide = useMutation(api.rides.cancel);

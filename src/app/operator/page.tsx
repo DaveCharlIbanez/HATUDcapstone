@@ -39,26 +39,26 @@ export default function DriverPage() {
   const [earnings, setEarnings] = useState(0);
   const [ridesToday, setRidesToday] = useState(0);
 
-  // Resolve operator profile from userId
+  // The signed-in driver's own profile
   const operatorProfile = useQuery(
-    api.operators.getByUserId,
-    user ? { userId: user.userId as Id<"users"> } : "skip"
+    api.operators.getSelf,
+    sessionToken ? { sessionToken } : "skip"
   );
 
   // Real-time list of pending rides with commuter info
-  const pendingRides = useQuery(api.rides.listPendingWithCommuter);
-
-  // Operator's current active ride (restores state on page reload)
-  const activeRide = useQuery(
-    api.rides.getActiveByOperator,
-    operatorProfile ? { operatorId: operatorProfile._id } : "skip"
+  const pendingRides = useQuery(
+    api.rides.listPendingWithCommuter,
+    sessionToken ? { sessionToken } : "skip"
   );
 
-  // Commuter details for the active ride
-  const activeRideCommuter = useQuery(
-    api.commuters.getById,
-    activeRide?.commuterId ? { id: activeRide.commuterId } : "skip"
+  // The driver's current active ride plus a projected view of the passenger
+  const activeTrip = useQuery(
+    api.rides.getActiveForMe,
+    sessionToken ? { sessionToken } : "skip"
   );
+  const activeRide = activeTrip?.ride ?? null;
+  const activeRideCommuter =
+    activeTrip?.partner?.kind === "commuter" ? activeTrip.partner : null;
 
   const acceptRideMutation = useMutation(api.rides.accept);
   const setAvailabilityMutation = useMutation(api.operators.setAvailability);

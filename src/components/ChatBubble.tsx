@@ -13,7 +13,7 @@ interface Message {
   read: boolean;
   rideId: Id<"rides">;
   senderId: Id<"users">;
-  senderRole: "commuter" | "operator";
+  senderRole: "commuter" | "operator" | "admin";
 }
 
 interface ChatBubbleProps {

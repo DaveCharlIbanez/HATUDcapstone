@@ -1,7 +1,30 @@
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
-async function resolveSession(ctx: MutationCtx | QueryCtx, token: string) {
+export type Role = "commuter" | "operator" | "admin";
+
+/**
+ * The identity behind a session token, plus the id of the role profile that
+ * belongs to it. The profile id is resolved server-side — clients never send
+ * one, so they cannot ask for someone else's record.
+ */
+export interface Actor {
+  adminId?: Id<"admins">;
+  commuterId?: Id<"commuters">;
+  operatorId?: Id<"operators">;
+  role: Role;
+  userId: Id<"users">;
+}
+
+export interface RideAccess {
+  actor: Actor;
+  isAdmin: boolean;
+  ride: Doc<"rides">;
+}
+
+type Ctx = MutationCtx | QueryCtx;
+
+async function resolveSession(ctx: Ctx, token: string) {
   const session = await ctx.db
     .query("sessions")
     .withIndex("by_token", (q) => q.eq("token", token))
@@ -19,15 +42,49 @@ async function resolveSession(ctx: MutationCtx | QueryCtx, token: string) {
   return { userId: session.userId as Id<"users">, role: user.role };
 }
 
-export async function requireAuth(ctx: MutationCtx | QueryCtx, token: string) {
-  return resolveSession(ctx, token);
+/**
+ * Resolves a session token to an actor, including the id of the caller's own
+ * role profile.
+ */
+export async function resolveActor(ctx: Ctx, token: string): Promise<Actor> {
+  const { userId, role } = await resolveSession(ctx, token);
+  const actor: Actor = { userId, role };
+
+  if (role === "commuter") {
+    const profile = await ctx.db
+      .query("commuters")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first();
+    if (profile) {
+      actor.commuterId = profile._id;
+    }
+  } else if (role === "operator") {
+    const profile = await ctx.db
+      .query("operators")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first();
+    if (profile) {
+      actor.operatorId = profile._id;
+    }
+  } else {
+    const profile = await ctx.db
+      .query("admins")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first();
+    if (profile) {
+      actor.adminId = profile._id;
+    }
+  }
+
+  return actor;
 }
 
-export async function requireRole(
-  ctx: MutationCtx | QueryCtx,
-  token: string,
-  expectedRole: "commuter" | "operator" | "admin"
-) {
+export async function requireAuth(ctx: Ctx, token: string) {
+  const { userId, role } = await resolveSession(ctx, token);
+  return { userId, role };
+}
+
+export async function requireRole(ctx: Ctx, token: string, expectedRole: Role) {
   const { userId, role } = await resolveSession(ctx, token);
   if (role !== expectedRole) {
     throw new Error(`Forbidden: requires ${expectedRole} role`);
@@ -36,7 +93,7 @@ export async function requireRole(
 }
 
 export async function requireOwnership(
-  ctx: MutationCtx | QueryCtx,
+  ctx: Ctx,
   token: string,
   resourceUserId: Id<"users">
 ) {
@@ -50,7 +107,7 @@ export async function requireOwnership(
 }
 
 export async function requireOperatorOwnership(
-  ctx: MutationCtx | QueryCtx,
+  ctx: Ctx,
   token: string,
   operatorId: Id<"operators">
 ) {
@@ -65,7 +122,7 @@ export async function requireOperatorOwnership(
 }
 
 export async function requireCommuterOwnership(
-  ctx: MutationCtx | QueryCtx,
+  ctx: Ctx,
   token: string,
   commuterId: Id<"commuters">
 ) {
@@ -77,4 +134,42 @@ export async function requireCommuterOwnership(
   if (!commuter || commuter.userId !== userId) {
     throw new Error("Forbidden: you do not own this commuter profile");
   }
+}
+
+/**
+ * Gate for reading a ride the caller takes part in. Admins bypass the
+ * participation check; everyone else must be the ride's commuter or its
+ * assigned operator.
+ */
+export async function requireRideParticipant(
+  ctx: Ctx,
+  token: string,
+  rideId: Id<"rides">
+): Promise<RideAccess> {
+  const actor = await resolveActor(ctx, token);
+  const ride = await ctx.db.get(rideId);
+
+  if (!ride) {
+    throw new Error("Ride not found");
+  }
+
+  if (actor.role === "admin") {
+    return { actor, ride, isAdmin: true };
+  }
+
+  if (
+    actor.role === "commuter" &&
+    (!actor.commuterId || ride.commuterId !== actor.commuterId)
+  ) {
+    throw new Error("Forbidden: you are not part of this ride");
+  }
+
+  if (
+    actor.role === "operator" &&
+    (!actor.operatorId || ride.operatorId !== actor.operatorId)
+  ) {
+    throw new Error("Forbidden: you are not assigned to this ride");
+  }
+
+  return { actor, ride, isAdmin: false };
 }

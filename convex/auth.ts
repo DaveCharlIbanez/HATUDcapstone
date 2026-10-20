@@ -1,94 +1,62 @@
 import { v } from "convex/values";
-import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { hashPassword, verifyPassword } from "./lib/password";
 
 // MutationCtx used by rate-limiting helpers
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PBKDF2_ITERATIONS = 200_000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const MAX_FAILED_ATTEMPTS = 10;
+const SHORT_LOCK_THRESHOLD = 5;
+const SHORT_LOCK_MS = 900_000; // 15 minutes
+const LONG_LOCK_MS = 3_600_000; // 1 hour
 
-// ─── Password helpers ─────────────────────────────────────────────────────────
-
-async function hashPasswordPBKDF2(password: string): Promise<string> {
-  const saltBytes = crypto.getRandomValues(new Uint8Array(16));
-  const saltB64 = btoa(String.fromCharCode(...saltBytes));
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"]
-  );
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      hash: "SHA-256",
-      salt: saltBytes,
-      iterations: PBKDF2_ITERATIONS,
-    },
-    keyMaterial,
-    256
-  );
-  const hashB64 = btoa(String.fromCharCode(...new Uint8Array(bits)));
-  return `pbkdf2:${PBKDF2_ITERATIONS}:${saltB64}:${hashB64}`;
-}
-
-async function verifyPasswordPBKDF2(
-  password: string,
-  stored: string
-): Promise<boolean> {
-  const parts = stored.split(":");
-  if (parts.length !== 4 || parts[0] !== "pbkdf2") {
-    return false;
-  }
-  const [, iterStr, saltB64, expectedB64] = parts;
-  if (saltB64 === undefined || expectedB64 === undefined) {
-    return false;
-  }
-
-  // Guard against a tampered iteration count in the stored hash
-  const iterations = Number(iterStr);
-  if (!Number.isInteger(iterations) || iterations < 100_000) {
-    return false;
-  }
-
-  const saltBytes = Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0));
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"]
-  );
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: saltBytes, iterations },
-    keyMaterial,
-    256
-  );
-  return btoa(String.fromCharCode(...new Uint8Array(bits))) === expectedB64;
-}
-
-// Only used for migrating legacy SHA-256 hashes on first login
-async function hashSHA256Legacy(password: string): Promise<string> {
-  const data = new TextEncoder().encode(`${password}hatud_salt_2024`);
-  const buf = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
+const UPPERCASE_LETTER = /[A-Z]/;
+const DIGIT = /[0-9]/;
 
 // ─── Session helpers ──────────────────────────────────────────────────────────
 
+function resolveLockDuration(failureCount: number): number | undefined {
+  if (failureCount >= MAX_FAILED_ATTEMPTS) {
+    return Date.now() + LONG_LOCK_MS;
+  }
+  if (failureCount >= SHORT_LOCK_THRESHOLD) {
+    return Date.now() + SHORT_LOCK_MS;
+  }
+  return;
+}
+
 function generateSessionToken(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-  const h = Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  return crypto.randomUUID();
+}
+
+async function getProfileName(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  role: "commuter" | "operator" | "admin"
+): Promise<string> {
+  if (role === "commuter") {
+    const profile = await ctx.db
+      .query("commuters")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first();
+    return profile?.name ?? "";
+  }
+  if (role === "operator") {
+    const profile = await ctx.db
+      .query("operators")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first();
+    return profile?.name ?? "";
+  }
+  const profile = await ctx.db
+    .query("admins")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .first();
+  return profile?.name ?? "";
 }
 
 // ─── Rate limiting helpers ────────────────────────────────────────────────────
@@ -111,13 +79,16 @@ async function recordFailedAttempt(ctx: MutationCtx, email: string) {
     .query("loginAttempts")
     .withIndex("by_email", (q) => q.eq("email", email))
     .first();
-  const count = (rec?.count ?? 0) + 1;
-  const lockedUntil =
-    count >= 10
-      ? Date.now() + 3_600_000
-      : count >= 5
-        ? Date.now() + 900_000
-        : undefined;
+
+  // A lock that has already expired resets the counter, otherwise the user
+  // re-locks on their next attempt hours later.
+  const lockExpired =
+    rec?.lockedUntil !== undefined && rec.lockedUntil <= Date.now();
+  const previousCount = lockExpired ? 0 : (rec?.count ?? 0);
+  const count = previousCount + 1;
+
+  const lockedUntil = resolveLockDuration(count);
+
   if (rec) {
     await ctx.db.patch(rec._id, {
       count,
@@ -172,10 +143,10 @@ export const signup = mutation({
     if (args.password.length < 8) {
       throw new Error("Password must be at least 8 characters");
     }
-    if (!/[A-Z]/.test(args.password)) {
+    if (!UPPERCASE_LETTER.test(args.password)) {
       throw new Error("Password must contain at least one uppercase letter");
     }
-    if (!/[0-9]/.test(args.password)) {
+    if (!DIGIT.test(args.password)) {
       throw new Error("Password must contain at least one number");
     }
 
@@ -195,7 +166,7 @@ export const signup = mutation({
       throw new Error("Phone number already registered");
     }
 
-    const passwordHash = await hashPasswordPBKDF2(args.password);
+    const passwordHash = await hashPassword(args.password);
     const now = Date.now();
 
     const userId = await ctx.db.insert("users", {
@@ -267,24 +238,22 @@ export const login = mutation({
       throw new Error("Invalid email or password");
     }
 
-    let valid = await verifyPasswordPBKDF2(args.password, user.passwordHash);
-
-    // Transparent migration: if old SHA-256 hash, verify then re-hash with PBKDF2
-    if (!(valid || user.passwordHash.startsWith("pbkdf2:"))) {
-      const legacyHash = await hashSHA256Legacy(args.password);
-      if (legacyHash === user.passwordHash) {
-        valid = true;
-        const newHash = await hashPasswordPBKDF2(args.password);
-        await ctx.db.patch(user._id, {
-          passwordHash: newHash,
-          updatedAt: Date.now(),
-        });
-      }
-    }
+    const { valid, needsRehash } = await verifyPassword(
+      args.password,
+      user.passwordHash
+    );
 
     if (!valid) {
       await recordFailedAttempt(ctx, args.email);
       throw new Error("Invalid email or password");
+    }
+
+    // Transparent migration: legacy SHA-256 hashes are upgraded on first login.
+    if (needsRehash) {
+      await ctx.db.patch(user._id, {
+        passwordHash: await hashPassword(args.password),
+        updatedAt: Date.now(),
+      });
     }
 
     await clearLoginAttempts(ctx, args.email);
@@ -299,18 +268,10 @@ export const login = mutation({
       isRevoked: false,
     });
 
-    // Fetch display name from the role-specific profile table
-    const profileTable =
-      user.role === "commuter"
-        ? "commuters"
-        : user.role === "operator"
-          ? "operators"
-          : "admins";
-    const profile = await ctx.db
-      .query(profileTable)
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .first();
-    const name = (profile as any)?.name ?? "";
+    // Record the sign-in on the user record.
+    await ctx.db.patch(user._id, { updatedAt: now });
+
+    const name = await getProfileName(ctx, user._id, user.role);
 
     return { sessionToken: token, role: user.role, name };
   },
@@ -349,21 +310,12 @@ export const getSession = query({
       return null;
     }
 
-    const profileTable =
-      user.role === "commuter"
-        ? "commuters"
-        : user.role === "operator"
-          ? "operators"
-          : "admins";
-    const profile = await ctx.db
-      .query(profileTable)
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .first();
+    const name = await getProfileName(ctx, user._id, user.role);
 
     return {
       userId: user._id,
       role: user.role,
-      name: (profile as any)?.name ?? "",
+      name,
       email: user.email,
     };
   },
