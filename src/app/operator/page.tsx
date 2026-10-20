@@ -115,22 +115,38 @@ export default function DriverPage() {
         .setLngLat([122.0175, 10.7883])
         .addTo(map.current);
 
+      let watchId: number | null = null;
+      let hasCentred = false;
+
       if ("geolocation" in navigator) {
-        navigator.geolocation.watchPosition(
+        watchId = navigator.geolocation.watchPosition(
           (position) => {
             const { longitude, latitude } = position.coords;
             setDriverLocation([longitude, latitude]);
             if (userMarkerRef.current) {
               userMarkerRef.current.setLngLat([longitude, latitude]);
             }
-            if (map.current) {
-              map.current.flyTo({ center: [longitude, latitude], zoom: 13 });
+            // Centre the map on the first fix only, otherwise the camera is
+            // dragged around by every GPS sample.
+            if (!hasCentred) {
+              hasCentred = true;
+              map.current?.flyTo({ center: [longitude, latitude], zoom: 13 });
             }
           },
           (error) => console.error(error),
           { enableHighAccuracy: true }
         );
       }
+
+      return () => {
+        // Leaving the watcher running keeps the GPS radio on and keeps
+        // writing to a component that is no longer mounted.
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+        }
+        map.current?.remove();
+        map.current = null;
+      };
     }
   }, [theme]);
 
