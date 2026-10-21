@@ -8,7 +8,8 @@ function dashboardForRole(role: string): string {
     return "admin";
   }
   if (role === "operator") {
-    return "operator";
+    // The operator map is the single operator dashboard.
+    return "operator/map";
   }
   return "map";
 }

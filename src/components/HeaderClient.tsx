@@ -52,7 +52,7 @@ export default function HeaderClient() {
           {isOperator && (
             <Link
               className="rounded-full px-4 py-2 hover:bg-[var(--surface-muted)]"
-              href="/operator"
+              href="/operator/map"
             >
               Operator
             </Link>

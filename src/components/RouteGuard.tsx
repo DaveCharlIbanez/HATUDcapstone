@@ -25,6 +25,14 @@ const ROUTE_ROLES: {
   { prefix: "/feedback", role: "commuter" },
 ];
 
+/** Where each role belongs. Operators live on the map, which is the single
+ * operator dashboard. */
+const ROLE_HOME: Record<string, string> = {
+  admin: "/admin",
+  operator: "/operator/map",
+  commuter: "/map",
+};
+
 function matchRoute(pathname: string) {
   return ROUTE_ROLES.find(
     (route) =>
@@ -49,7 +57,7 @@ export function RouteGuard({ children }: { children: ReactNode }) {
       return;
     }
     if (requiredRole && user.role !== requiredRole) {
-      router.replace(`/${user.role}`);
+      router.replace(ROLE_HOME[user.role] ?? "/map");
     }
   }, [isLoading, route, requiredRole, user, pathname, router]);
 

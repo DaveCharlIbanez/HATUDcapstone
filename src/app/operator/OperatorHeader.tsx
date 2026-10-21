@@ -15,21 +15,29 @@ export interface OperatorProfileView {
 }
 
 interface OperatorHeaderProps {
-  offlineClassName: string;
   onLogout: () => void;
   online: boolean;
-  onlineClassName: string;
   onToggleOnline: () => void;
   profile: OperatorProfileView | undefined;
   theme: string;
+}
+
+function onlineToggleClass(theme: string): string {
+  return theme === "light"
+    ? "border-emerald-500 bg-emerald-500 text-white"
+    : "border-emerald-400 bg-emerald-600 text-white";
+}
+
+function offlineToggleClass(theme: string): string {
+  return theme === "light"
+    ? "border-slate-400 bg-slate-200 text-slate-700"
+    : "border-slate-400 bg-slate-700 text-slate-200";
 }
 
 export function OperatorHeader({
   profile,
   theme,
   online,
-  onlineClassName,
-  offlineClassName,
   onLogout,
   onToggleOnline,
 }: OperatorHeaderProps) {
@@ -139,7 +147,7 @@ export function OperatorHeader({
           </button>
           <button
             className={`inline-flex h-11 items-center justify-center gap-1 rounded-xl px-4 font-semibold text-sm ${
-              online ? onlineClassName : offlineClassName
+              online ? onlineToggleClass(theme) : offlineToggleClass(theme)
             }`}
             onClick={onToggleOnline}
             type="button"

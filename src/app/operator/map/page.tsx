@@ -1,25 +1,20 @@
 "use client";
 
 import maplibregl from "maplibre-gl";
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
-import {
-  FaArrowLeft,
-  FaCheckCircle,
-  FaMapMarkerAlt,
-  FaPhone,
-} from "react-icons/fa";
+import { FaCheckCircle, FaMapMarkerAlt, FaPhone } from "react-icons/fa";
 import { ChatBubble } from "@/components/ChatBubble";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/authContext";
 import { getRoute } from "@/lib/mapClient";
-import { createMarkerElement } from "@/lib/mapMarkers";
+import { addLandmarkMarkers, createMarkerElement } from "@/lib/mapMarkers";
 import { useTheme } from "@/lib/themeContext";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { OperatorHeader } from "../OperatorHeader";
 import { CurrentRidePanel } from "./CurrentRidePanel";
 
 export default function OperatorMapPage() {
@@ -27,8 +22,9 @@ export default function OperatorMapPage() {
   const map = useRef<maplibregl.Map | null>(null);
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const landmarkMarkersRef = useRef<maplibregl.Marker[]>([]);
 
-  const { sessionToken, isLoading: authLoading } = useAuth();
+  const { logout, sessionToken, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const { theme } = useTheme();
   const _router = useRouter();
@@ -55,6 +51,11 @@ export default function OperatorMapPage() {
   const updateOperatorLocationMutation = useMutation(
     api.rides.updateOperatorLocation
   );
+  const setAvailabilityMutation = useMutation(api.operators.setAvailability);
+
+  const [online, setOnline] = useState(false);
+  const [earnings, setEarnings] = useState(0);
+  const [ridesToday, setRidesToday] = useState(0);
 
   const partnerLocation = useQuery(
     api.rides.getPartnerLocation,
@@ -107,6 +108,44 @@ export default function OperatorMapPage() {
     setShowChat(false);
   }, [authLoading, activeRide, activeRide?.status, sessionToken]);
 
+  // Seed the online flag from the server on load
+  useEffect(() => {
+    if (operatorProfile) {
+      setOnline(operatorProfile.isAvailable);
+    }
+  }, [operatorProfile?._id, operatorProfile]);
+
+  const handleToggleOnline = async () => {
+    if (!(operatorProfile && sessionToken)) {
+      return;
+    }
+    if (activeRide && online) {
+      showToast("Complete your current ride before going offline.", "error");
+      return;
+    }
+
+    const nextOnline = !online;
+    setOnline(nextOnline);
+    try {
+      await setAvailabilityMutation({
+        sessionToken,
+        id: operatorProfile._id,
+        isAvailable: nextOnline,
+        currentLocation: locationRef.current
+          ? {
+              latitude: locationRef.current.latitude,
+              longitude: locationRef.current.longitude,
+            }
+          : undefined,
+      });
+    } catch {
+      // Put the toggle back the way it was, so the UI never claims the
+      // driver is online when the server disagrees.
+      setOnline(!nextOnline);
+      showToast("Could not change your availability.", "error");
+    }
+  };
+
   // Map init
   useEffect(() => {
     if (map.current || !mapContainer.current) {
@@ -117,12 +156,13 @@ export default function OperatorMapPage() {
       theme === "dark"
         ? "https://tiles.openfreemap.org/styles/dark"
         : "https://tiles.openfreemap.org/styles/bright";
-    map.current = new maplibregl.Map({
+    const mapInstance = new maplibregl.Map({
       container: mapContainer.current,
       style: mapStyle,
       center: [122.0175, 10.7883],
       zoom: 13,
     });
+    map.current = mapInstance;
 
     const driverEl = document.createElement("div");
     driverEl.style.width = "20px";
@@ -135,6 +175,11 @@ export default function OperatorMapPage() {
     userMarkerRef.current = new maplibregl.Marker({ element: driverEl })
       .setLngLat([122.0175, 10.7883])
       .addTo(map.current);
+
+    // The same landmarks the passenger map shows.
+    mapInstance.on("load", () => {
+      addLandmarkMarkers(mapInstance, landmarkMarkersRef.current);
+    });
 
     let watchId: number | null = null;
     let hasCentred = false;
@@ -168,6 +213,10 @@ export default function OperatorMapPage() {
       if (watchId !== null) {
         navigator.geolocation.clearWatch(watchId);
       }
+      for (const marker of landmarkMarkersRef.current) {
+        marker.remove();
+      }
+      landmarkMarkersRef.current = [];
       map.current?.remove();
       map.current = null;
     };
@@ -386,6 +435,8 @@ export default function OperatorMapPage() {
       id: activeRide._id,
       operatorId: operatorProfile._id,
     });
+    setEarnings((previous) => previous + (activeRide.fare ?? 0));
+    setRidesToday((previous) => previous + 1);
   };
 
   const handleCall = (phone: string) => {
@@ -402,24 +453,41 @@ export default function OperatorMapPage() {
   return (
     <div className="relative h-screen w-full bg-slate-950">
       {/* Map */}
-      <div className="relative h-full w-full" ref={mapContainer} />
+      {/* `relative z-0` makes this a stacking context, so the map's markers
+          stay inside the map instead of painting over the overlays. */}
+      <div className="relative z-0 h-full w-full" ref={mapContainer} />
 
       {/* Header */}
-      <div className="absolute top-0 right-0 left-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent p-2 md:p-4">
-        <Link
-          className="inline-flex items-center gap-1.5 text-white text-xs transition hover:text-sky-400 md:text-sm"
-          href="/operator"
-        >
-          <FaArrowLeft className="text-xs md:text-sm" />
-          <span className="hidden sm:inline">Back</span>
-        </Link>
-        <button
-          className="rounded-lg bg-sky-600 px-2 py-1 text-[10px] text-white md:px-3 md:py-1 md:text-xs"
-          onClick={() => setShowChat((prev) => !prev)}
-          type="button"
-        >
-          Chat {showChat ? "ON" : "OFF"}
-        </button>
+      <div className="absolute top-0 right-0 left-0 z-10">
+        <OperatorHeader
+          onLogout={logout}
+          online={online}
+          onToggleOnline={handleToggleOnline}
+          profile={operatorProfile}
+          theme={theme}
+        />
+        <div className="flex justify-end px-2 pb-2 md:px-4">
+          <button
+            className="rounded-lg bg-sky-600 px-2 py-1 text-[10px] text-white md:px-3 md:py-1 md:text-xs"
+            onClick={() => setShowChat((prev) => !prev)}
+            type="button"
+          >
+            Chat {showChat ? "ON" : "OFF"}
+          </button>
+        </div>
+      </div>
+
+      {/* Earnings & Stats — Desktop only */}
+      <div className="absolute top-28 right-4 z-10 hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-3 sm:block sm:p-4">
+        <div className="text-center">
+          <p className="mb-1 text-[var(--text-muted)] text-xs">
+            Today&apos;s Earnings
+          </p>
+          <p className="font-bold text-sky-400 text-xl">₱{earnings}</p>
+          <p className="mt-1 text-[var(--text-muted)] text-xs">
+            {ridesToday} rides
+          </p>
+        </div>
       </div>
 
       {/* Ride List Panel — bottom sheet on mobile, sidebar on desktop */}

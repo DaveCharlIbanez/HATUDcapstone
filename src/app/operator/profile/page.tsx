@@ -95,7 +95,7 @@ export default function OperatorProfilePage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Link
               className="inline-flex items-center justify-center rounded-full bg-sky-600 px-4 py-3 font-semibold text-sm text-white shadow-sm transition hover:bg-sky-500"
-              href="/operator"
+              href="/operator/map"
             >
               Back to Dashboard
             </Link>
@@ -252,7 +252,7 @@ export default function OperatorProfilePage() {
                 </button>
                 <button
                   className="inline-flex items-center justify-center gap-2 rounded-3xl bg-emerald-600 px-4 py-3 font-semibold text-sm text-white transition hover:bg-emerald-500"
-                  onClick={() => router.push("/operator")}
+                  onClick={() => router.push("/operator/map")}
                   type="button"
                 >
                   <FaRoute /> Update Route
@@ -385,7 +385,7 @@ export default function OperatorProfilePage() {
               <div className="mt-4 space-y-3">
                 <button
                   className="w-full rounded-3xl border border-[var(--border)] bg-[var(--surface-strong)] px-4 py-3 font-semibold text-[var(--foreground)] text-sm transition hover:bg-[var(--surface-muted)]"
-                  onClick={() => router.push("/operator")}
+                  onClick={() => router.push("/operator/map")}
                   type="button"
                 >
                   Go to Dashboard

@@ -135,7 +135,7 @@ const MapPage = () => {
       return;
     }
     if (!authLoading && user && user.role !== "commuter") {
-      router.push(user.role === "admin" ? "/admin" : "/operator");
+      router.push(user.role === "admin" ? "/admin" : "/operator/map");
     }
   }, [user, authLoading, router]);
 
@@ -284,7 +284,9 @@ const MapPage = () => {
     <div className="relative h-screen w-full bg-[var(--background)] text-[var(--foreground)]">
       <MapOverlays displayName={displayName} onLogout={logout} theme={theme} />
 
-      <div className="h-full w-full" ref={mapContainer} />
+      {/* `relative z-0` makes this a stacking context, so the map's markers
+          stay inside the map instead of painting over the overlays. */}
+      <div className="relative z-0 h-full w-full" ref={mapContainer} />
 
       <div className="pointer-events-none absolute bottom-0 flex w-full justify-center md:pb-0">
         <div className="pointer-events-auto w-full max-w-md rounded-t-3xl border-2 border-[var(--border)] bg-[var(--background)]/95 shadow-2xl backdrop-blur-xl md:mb-0">
