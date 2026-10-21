@@ -23,13 +23,15 @@
       "recommended": true,
       "style": {
         // The app follows the Next.js ecosystem convention (camelCase for
-        // modules, PascalCase for components). Ultracite's default is
-        // kebab-case, which would force a rename of every file that carries a
-        // relative import into convex/_generated.
+        // modules, PascalCase for components) and Next.js reserves kebab-case
+        // for its own convention files (error.tsx, global-error.tsx).
+        // Ultracite's default is kebab-case only, which would force a rename
+        // of every file that carries a relative import into
+        // convex/_generated.
         "useFilenamingConvention": {
           "level": "error",
           "options": {
-            "filenameCases": ["camelCase", "PascalCase"],
+            "filenameCases": ["camelCase", "PascalCase", "kebab-case"],
             "strictCase": false
           }
         }

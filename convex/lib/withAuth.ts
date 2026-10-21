@@ -43,6 +43,32 @@ async function resolveSession(ctx: Ctx, token: string) {
 }
 
 /**
+ * Resolves a session token without throwing. Returns null when the token is
+ * unknown, revoked or expired.
+ *
+ * Used by reads that are allowed to answer "no preference" for a signed-out
+ * caller — a theme lookup must not take the whole app down when a stale
+ * token is still sitting in local storage.
+ */
+export async function resolveSessionOrNull(ctx: Ctx, token: string) {
+  const session = await ctx.db
+    .query("sessions")
+    .withIndex("by_token", (q) => q.eq("token", token))
+    .first();
+
+  if (!session || session.isRevoked || Date.now() > session.expiresAt) {
+    return null;
+  }
+
+  const user = await ctx.db.get(session.userId);
+  if (!user) {
+    return null;
+  }
+
+  return { userId: session.userId as Id<"users">, role: user.role };
+}
+
+/**
  * Resolves a session token to an actor, including the id of the caller's own
  * role profile.
  */

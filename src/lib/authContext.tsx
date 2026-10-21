@@ -22,6 +22,13 @@ interface User {
 
 interface AuthContextType {
   isLoading: boolean;
+  /**
+   * True once the server has confirmed the stored token is a live session.
+   * Authenticated queries must not be sent before this is true: a stale
+   * token makes every guarded query throw, and a throw inside the root
+   * layout takes the whole app down.
+   */
+  isSessionValidated: boolean;
   login: (
     email: string,
     password: string
@@ -70,6 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api.auth.getSession,
     sessionToken ? { sessionToken } : "skip"
   );
+
+  // `sessionData` is undefined while the validation query is in flight.
+  const isSessionValidated = sessionToken !== null && sessionData !== undefined;
 
   useEffect(() => {
     if (sessionToken === null) {
@@ -159,7 +169,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, sessionToken, login, signup, logout }}
+      value={{
+        user,
+        isLoading,
+        isSessionValidated,
+        sessionToken,
+        login,
+        signup,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -24,12 +24,15 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const STORAGE_KEY = "hatud_theme";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { sessionToken } = useAuth();
+  const { isSessionValidated, sessionToken } = useAuth();
   const [theme, setThemeState] = useState<Theme>("light");
 
+  // Only ask for the preference once the server has confirmed the session is
+  // live. Sending a stale token makes the query fail, and this provider lives
+  // in the root layout, so the failure would take down the whole app.
   const themePreference = useQuery(
     api.theme.getUserTheme,
-    sessionToken ? { sessionToken } : "skip"
+    isSessionValidated && sessionToken ? { sessionToken } : "skip"
   );
 
   const setUserTheme = useMutation(api.theme.setUserTheme);
