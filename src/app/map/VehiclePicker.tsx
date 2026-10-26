@@ -58,7 +58,9 @@ export function VehiclePicker({
               <div className="flex items-center gap-3">
                 <div className="text-3xl text-sky-400">{vehicle.icon}</div>
                 <div className="text-left">
-                  <div className="font-semibold text-white">{vehicle.name}</div>
+                  <div className="font-semibold text-[var(--foreground)]">
+                    {vehicle.name}
+                  </div>
                   <div className="flex items-center gap-2 text-[var(--text-muted)] text-sm">
                     <FaClock className="text-xs" /> {vehicle.eta} •{" "}
                     {vehicle.capacity} passenger(s)
@@ -66,7 +68,7 @@ export function VehiclePicker({
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-bold text-lg text-white">
+                <div className="font-bold text-[var(--foreground)] text-lg">
                   ₱
                   {fareQuote ? fareQuote[vehicle.type].fare : vehicle.basePrice}
                 </div>

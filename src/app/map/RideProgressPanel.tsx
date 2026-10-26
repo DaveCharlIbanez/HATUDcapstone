@@ -38,7 +38,7 @@ export function RideProgressPanel({
     return (
       <div className="py-8 text-center">
         <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-sky-400 border-t-transparent" />
-        <h3 className="mb-2 font-semibold text-lg text-white">
+        <h3 className="mb-2 font-semibold text-[var(--foreground)] text-lg">
           Finding your driver
         </h3>
         <p className="mb-6 text-[var(--text-muted)]">
@@ -60,7 +60,7 @@ export function RideProgressPanel({
       return (
         <div className="py-8 text-center">
           <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-sky-400 border-t-transparent" />
-          <h3 className="mb-2 font-semibold text-lg text-white">
+          <h3 className="mb-2 font-semibold text-[var(--foreground)] text-lg">
             Driver found!
           </h3>
           <p className="text-[var(--text-muted)]">Loading driver details...</p>
@@ -70,7 +70,7 @@ export function RideProgressPanel({
 
     return (
       <div className="space-y-4">
-        <h3 className="mb-6 text-center font-semibold text-white text-xl">
+        <h3 className="mb-6 text-center font-semibold text-[var(--foreground)] text-xl">
           Driver Assigned!
         </h3>
 
@@ -80,7 +80,7 @@ export function RideProgressPanel({
               🏍️
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-semibold text-base text-white">
+              <div className="font-semibold text-[var(--foreground)] text-base">
                 {matchedOperator.name}
               </div>
             </div>
@@ -88,19 +88,19 @@ export function RideProgressPanel({
           <div className="space-y-2 border-[var(--border)] border-t pt-4 text-[var(--text-muted)] text-sm">
             <div className="flex justify-between">
               <span>Vehicle:</span>
-              <span className="font-medium text-white">
+              <span className="font-medium text-[var(--foreground)]">
                 {matchedOperator.vehicleInfo.model}
               </span>
             </div>
             <div className="flex justify-between">
               <span>Plate:</span>
-              <span className="font-medium text-white">
+              <span className="font-medium text-[var(--foreground)]">
                 {matchedOperator.vehicleInfo.plateNumber}
               </span>
             </div>
             <div className="flex justify-between">
               <span>Color:</span>
-              <span className="font-medium text-white">
+              <span className="font-medium text-[var(--foreground)]">
                 {matchedOperator.vehicleInfo.color}
               </span>
             </div>
@@ -120,7 +120,7 @@ export function RideProgressPanel({
 
   return (
     <div className="py-8 text-center">
-      <h3 className="mb-4 font-semibold text-lg text-white">
+      <h3 className="mb-4 font-semibold text-[var(--foreground)] text-lg">
         {rideStatus === "arriving" && "Driver is on the way"}
         {rideStatus === "arrived" && "Driver has arrived"}
         {rideStatus === "in-progress" && "Ride in progress"}
@@ -132,7 +132,7 @@ export function RideProgressPanel({
           <div className="flex items-center gap-4">
             <div className="text-3xl">🏍️</div>
             <div className="text-left">
-              <div className="font-medium text-white">
+              <div className="font-medium text-[var(--foreground)]">
                 {matchedOperator.name}
               </div>
               <div className="text-[var(--text-muted)] text-sm">

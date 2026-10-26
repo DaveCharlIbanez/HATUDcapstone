@@ -150,7 +150,7 @@ export function LocationStep({
                   {CATEGORY_INFO[landmark.category].icon}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium text-sm text-white">
+                  <div className="truncate font-medium text-[var(--foreground)] text-sm">
                     {landmark.name}
                   </div>
                   <div className="text-[var(--text-muted)] text-xs">

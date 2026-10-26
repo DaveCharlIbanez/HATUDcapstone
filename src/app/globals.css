@@ -240,7 +240,7 @@ button,
 }
 
 .btn-secondary {
-  color: #ffffff;
+  color: var(--secondary-foreground);
   background: var(--btn-secondary);
   border-color: transparent;
 }
