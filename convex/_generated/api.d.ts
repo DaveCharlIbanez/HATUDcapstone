@@ -26,6 +26,7 @@ import type * as lib_withAuth from "../lib/withAuth.js";
 import type * as messages from "../messages.js";
 import type * as operators from "../operators.js";
 import type * as payments from "../payments.js";
+import type * as profile from "../profile.js";
 import type * as rides from "../rides.js";
 import type * as seed from "../seed.js";
 import type * as theme from "../theme.js";
@@ -55,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   operators: typeof operators;
   payments: typeof payments;
+  profile: typeof profile;
   rides: typeof rides;
   seed: typeof seed;
   theme: typeof theme;

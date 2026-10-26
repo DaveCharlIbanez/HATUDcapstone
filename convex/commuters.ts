@@ -129,7 +129,11 @@ export const update = mutation({
     } = { updatedAt: Date.now() };
 
     if (args.name !== undefined) {
-      patch.name = args.name;
+      const name = args.name.trim();
+      if (!name) {
+        throw new Error("Name cannot be empty");
+      }
+      patch.name = name;
     }
     if (args.phone !== undefined) {
       patch.phone = args.phone;
