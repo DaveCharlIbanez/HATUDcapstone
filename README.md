@@ -203,18 +203,34 @@ needed.
 convex/            Backend functions
   lib/withAuth.ts    Session resolution and access gates
   lib/projections.ts Role-scoped response shapes
+  lib/approval.ts    Driver approval states
+  lib/imageType.ts   PNG/JPEG detection from file bytes
   lib/fare.ts        Fare table and distance calculation
   lib/payments.ts    Payment provider seam (GCash sandbox)
   lib/password.ts    PBKDF2 hashing, with legacy migration
   lib/legacyAccess.ts Compatibility shim for older APKs (temporary)
+  documents.ts     Driver credential uploads and review
   crons.ts           Session and login-attempt purges
 src/app/           Routes
   map/               Passenger map, plus the extracted panels
-  operator/          Driver dashboard, map and profile
+  operator/          Driver dashboard, map, profile and application
+  admin/             Operations dashboard
 src/components/    Shared UI
+  admin/             Metric disclosures and their detail panels
+  documents/         Credential capture sheet and upload tiles
 src/lib/           Auth, theme, map and toast helpers
 tests/convex/      Convex unit tests
 ```
+
+### Design documents
+
+| Document | What it covers |
+|---|---|
+| [`docs/admin-dashboard-plan.md`](docs/admin-dashboard-plan.md) | Admin panel information architecture, metric drill-downs, driver approval workflow |
+| [`docs/operator-document-upload-plan.md`](docs/operator-document-upload-plan.md) | Driver credential upload: camera capture, storage, and the review flow |
+| [`docs/logout-confirmation-plan.md`](docs/logout-confirmation-plan.md) | Where signing out lives, and the confirmation dialog that guards it |
+| [`docs/map-dark-light-mode-plan.md`](docs/map-dark-light-mode-plan.md) | Theme system and map style switching |
+| [`docs/color-contrast-plan.md`](docs/color-contrast-plan.md) | Light/dark contrast audit |
 
 ---
 
