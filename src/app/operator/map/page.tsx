@@ -10,12 +10,27 @@ import { ChatBubble } from "@/components/ChatBubble";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/authContext";
 import { getRoute } from "@/lib/mapClient";
-import { addLandmarkMarkers, createMarkerElement } from "@/lib/mapMarkers";
+import {
+  addLandmarkMarkers,
+  createMarkerElement,
+  createPartnerMarkerElement,
+  createSelfMarkerElement,
+  setMarkerStale,
+} from "@/lib/mapMarkers";
 import { useTheme } from "@/lib/themeContext";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { OperatorHeader } from "../OperatorHeader";
 import { CurrentRidePanel } from "./CurrentRidePanel";
+
+/** A position older than this is drawn greyed out. */
+const LOCATION_STALE_MS = 30_000;
+
+/** The pin for the driver's own position. */
+const DRIVER_PIN_COLOR = "#3B82F6";
+
+/** The pin for the passenger's position. */
+const COMMUTER_PIN_COLOR = "#3B82F6";
 
 export default function OperatorMapPage() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -24,10 +39,10 @@ export default function OperatorMapPage() {
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const landmarkMarkersRef = useRef<maplibregl.Marker[]>([]);
 
-  const { logout, sessionToken, isLoading: authLoading } = useAuth();
+  const { sessionToken, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const { theme } = useTheme();
-  const _router = useRouter();
+  const router = useRouter();
 
   const operatorProfile = useQuery(
     api.operators.getSelf,
@@ -69,6 +84,7 @@ export default function OperatorMapPage() {
       : null;
 
   const commuterMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const commuterMarkerMapRef = useRef<maplibregl.Map | null>(null);
   const routeLayerId = "route-line";
   const locationRef = useRef<{ latitude: number; longitude: number } | null>(
     null
@@ -114,6 +130,17 @@ export default function OperatorMapPage() {
       setOnline(operatorProfile.isAvailable);
     }
   }, [operatorProfile?._id, operatorProfile]);
+
+  // A driver whose application has not been approved cannot use the map, so
+  // they are sent to their application screen instead.
+  useEffect(() => {
+    if (!operatorProfile) {
+      return;
+    }
+    if (operatorProfile.approvalStatus !== "approved") {
+      router.replace("/operator/application");
+    }
+  }, [operatorProfile?.approvalStatus, operatorProfile, router]);
 
   const handleToggleOnline = async () => {
     if (!(operatorProfile && sessionToken)) {
@@ -164,13 +191,7 @@ export default function OperatorMapPage() {
     });
     map.current = mapInstance;
 
-    const driverEl = document.createElement("div");
-    driverEl.style.width = "20px";
-    driverEl.style.height = "20px";
-    driverEl.style.backgroundColor = "#3B82F6";
-    driverEl.style.borderRadius = "50%";
-    driverEl.style.border = "3px solid white";
-    driverEl.style.boxShadow = "0 0 8px rgba(59, 130, 246, 0.5)";
+    const driverEl = createSelfMarkerElement(DRIVER_PIN_COLOR);
 
     userMarkerRef.current = new maplibregl.Marker({ element: driverEl })
       .setLngLat([122.0175, 10.7883])
@@ -264,6 +285,14 @@ export default function OperatorMapPage() {
       return;
     }
 
+    // The map is rebuilt when the theme changes, which takes the old marker
+    // with it. A marker that belongs to a previous map has to be recreated.
+    if (commuterMarkerMapRef.current !== map.current) {
+      commuterMarkerRef.current?.remove();
+      commuterMarkerRef.current = null;
+      commuterMarkerMapRef.current = map.current;
+    }
+
     // Remove existing route if any
     if (map.current.getLayer(routeLayerId)) {
       map.current.removeLayer(routeLayerId);
@@ -279,31 +308,19 @@ export default function OperatorMapPage() {
         commuterLocation.latitude,
       ]);
     } else {
-      const commuterEl = document.createElement("div");
-      commuterEl.style.width = "24px";
-      commuterEl.style.height = "24px";
-      commuterEl.style.backgroundColor = "#3B82F6";
-      commuterEl.style.borderRadius = "50%";
-      commuterEl.style.border = "3px solid white";
-      commuterEl.style.boxShadow = "0 0 8px rgba(59, 130, 246, 0.5)";
-      commuterEl.style.display = "flex";
-      commuterEl.style.alignItems = "center";
-      commuterEl.style.justifyContent = "center";
-      commuterEl.style.fontSize = "14px";
-      commuterEl.innerHTML = "👤";
-
-      commuterMarkerRef.current = new maplibregl.Marker({ element: commuterEl })
+      commuterMarkerRef.current = new maplibregl.Marker({
+        element: createPartnerMarkerElement("👤", COMMUTER_PIN_COLOR),
+      })
         .setLngLat([commuterLocation.longitude, commuterLocation.latitude])
         .addTo(map.current);
     }
 
     // Check if location is stale (30 seconds)
-    const isStale = Date.now() - commuterLocation.updatedAt > 30_000;
-    if (isStale && commuterMarkerRef.current.getElement()) {
-      commuterMarkerRef.current.getElement().style.backgroundColor = "#94a3b8";
-      commuterMarkerRef.current.getElement().style.boxShadow =
-        "0 0 8px rgba(148, 163, 184, 0.5)";
-    }
+    setMarkerStale(
+      commuterMarkerRef.current.getElement(),
+      Date.now() - commuterLocation.updatedAt > LOCATION_STALE_MS,
+      COMMUTER_PIN_COLOR
+    );
 
     // Draw route from operator to commuter
     const drawRoute = async () => {
@@ -460,7 +477,6 @@ export default function OperatorMapPage() {
       {/* Header */}
       <div className="absolute top-0 right-0 left-0 z-10">
         <OperatorHeader
-          onLogout={logout}
           online={online}
           onToggleOnline={handleToggleOnline}
           profile={operatorProfile}

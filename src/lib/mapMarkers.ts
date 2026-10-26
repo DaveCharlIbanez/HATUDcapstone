@@ -45,6 +45,58 @@ function createLandmarkMarkerElement(category: string): HTMLElement {
 }
 
 /**
+ * The pin used for the other party on a live ride. Shared by the passenger
+ * map and the driver map so the two screens show the same marker.
+ */
+export function createPartnerMarkerElement(
+  glyph: string,
+  color: string
+): HTMLElement {
+  const element = document.createElement("div");
+  element.style.width = "26px";
+  element.style.height = "26px";
+  element.style.backgroundColor = color;
+  element.style.borderRadius = "50%";
+  element.style.border = "3px solid white";
+  element.style.boxShadow = `0 0 8px ${color}80`;
+  element.style.display = "flex";
+  element.style.alignItems = "center";
+  element.style.justifyContent = "center";
+  element.style.fontSize = "14px";
+  element.textContent = glyph;
+  return element;
+}
+
+/**
+ * The pin used for the rider's own position on the passenger map.
+ */
+export function createSelfMarkerElement(color: string): HTMLElement {
+  const element = document.createElement("div");
+  element.style.width = "20px";
+  element.style.height = "20px";
+  element.style.backgroundColor = color;
+  element.style.borderRadius = "50%";
+  element.style.border = "3px solid white";
+  element.style.boxShadow = `0 0 8px ${color}80`;
+  return element;
+}
+
+/**
+ * Greys a partner pin when the last position it received is old, so a driver
+ * who has gone offline is not shown as if they were still moving.
+ */
+export function setMarkerStale(
+  element: HTMLElement,
+  stale: boolean,
+  color: string
+): void {
+  element.style.backgroundColor = stale ? "#94a3b8" : color;
+  element.style.boxShadow = stale
+    ? "0 0 8px rgba(148, 163, 184, 0.5)"
+    : `0 0 8px ${color}80`;
+}
+
+/**
  * Plots every landmark on the map.
  *
  * Both the passenger map and the operator map call this, so the two screens

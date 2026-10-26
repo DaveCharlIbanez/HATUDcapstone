@@ -1,6 +1,5 @@
 "use client";
 
-import type maplibregl from "maplibre-gl";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatBubble } from "@/components/ChatBubble";
@@ -8,6 +7,7 @@ import { LocationStep } from "./LocationStep";
 import { MapOverlays } from "./MapOverlays";
 import { RideProgressPanel } from "./RideProgressPanel";
 import { useMapInstance } from "./useMapInstance";
+import { useRideLocation } from "./useRideLocation";
 import { useRideStage } from "./useRideStage";
 import { type VehicleOption, VehiclePicker } from "./VehiclePicker";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -27,7 +27,8 @@ import type { Id } from "../../../convex/_generated/dataModel";
 const MapPage = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const { user, logout, sessionToken, isLoading: authLoading } = useAuth();
+  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
+  const { user, sessionToken, isLoading: authLoading } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
 
@@ -75,6 +76,9 @@ const MapPage = () => {
 
   const matchedOperator =
     activeTrip?.partner?.kind === "operator" ? activeTrip.partner : null;
+
+  // Share the rider's position with the driver, and show the driver back.
+  useRideLocation({ activeRide, mapInstance, sessionToken });
 
   const createRide = useMutation(api.rides.create);
   const cancelRide = useMutation(api.rides.cancel);
@@ -126,6 +130,7 @@ const MapPage = () => {
     containerRef: mapContainer,
     landmarkMarkersRef,
     mapRef: map,
+    onMapReady: setMapInstance,
     theme,
   });
 
@@ -282,7 +287,7 @@ const MapPage = () => {
 
   return (
     <div className="relative h-screen w-full bg-[var(--background)] text-[var(--foreground)]">
-      <MapOverlays displayName={displayName} onLogout={logout} theme={theme} />
+      <MapOverlays displayName={displayName} theme={theme} />
 
       {/* `relative z-0` makes this a stacking context, so the map's markers
           stay inside the map instead of painting over the overlays. */}

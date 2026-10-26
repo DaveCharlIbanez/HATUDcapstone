@@ -1,12 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  FaSignOutAlt,
-  FaToggleOff,
-  FaToggleOn,
-  FaUserTie,
-} from "react-icons/fa";
+import { FaToggleOff, FaToggleOn, FaUserTie } from "react-icons/fa";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export interface OperatorProfileView {
@@ -15,7 +10,6 @@ export interface OperatorProfileView {
 }
 
 interface OperatorHeaderProps {
-  onLogout: () => void;
   online: boolean;
   onToggleOnline: () => void;
   profile: OperatorProfileView | undefined;
@@ -38,7 +32,6 @@ export function OperatorHeader({
   profile,
   theme,
   online,
-  onLogout,
   onToggleOnline,
 }: OperatorHeaderProps) {
   return (
@@ -46,7 +39,7 @@ export function OperatorHeader({
       <div className="absolute top-0 right-0 left-0 z-10 hidden bg-gradient-to-b from-black/50 to-transparent p-4 md:block">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-muted)] text-white">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-muted)] text-sky-600 dark:text-sky-300">
               <FaUserTie className="text-lg" />
             </div>
             <div>
@@ -68,14 +61,6 @@ export function OperatorHeader({
               <FaUserTie />
               <span className="hidden sm:inline">Profile</span>
             </Link>
-            <button
-              className="btn btn-secondary rounded-full px-3 py-2 text-rose-400 text-sm hover:text-rose-300 sm:px-4"
-              onClick={onLogout}
-              type="button"
-            >
-              <FaSignOutAlt />
-              <span className="hidden sm:inline">Logout</span>
-            </button>
             <button
               className={`btn rounded-full px-3 py-2 text-sm sm:px-4 ${online ? "btn-success" : "btn-secondary"}`}
               onClick={onToggleOnline}
@@ -134,17 +119,6 @@ export function OperatorHeader({
           >
             <ThemeToggle />
           </div>
-          <button
-            className={`inline-flex h-11 items-center justify-center rounded-xl border-2 px-4 ${
-              theme === "light"
-                ? "border-rose-500 bg-white text-rose-600"
-                : "border-rose-400 bg-rose-600 text-white"
-            }`}
-            onClick={onLogout}
-            type="button"
-          >
-            <FaSignOutAlt className="text-sm" />
-          </button>
           <button
             className={`inline-flex h-11 items-center justify-center gap-1 rounded-xl px-4 font-semibold text-sm ${
               online ? onlineToggleClass(theme) : offlineToggleClass(theme)

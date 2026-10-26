@@ -11,6 +11,13 @@ interface UseMapInstanceOptions {
   containerRef: RefObject<HTMLDivElement | null>;
   landmarkMarkersRef: RefObject<maplibregl.Marker[]>;
   mapRef: RefObject<maplibregl.Map | null>;
+  /**
+   * Called with the new map instance whenever the map is built, and with
+   * null when it is torn down. Consumers that draw onto the map need the
+   * instance itself: the map is rebuilt when the theme changes, and
+   * anything drawn on the old map is lost with it.
+   */
+  onMapReady: (map: maplibregl.Map | null) => void;
   theme: string;
 }
 
@@ -20,8 +27,9 @@ interface UseMapInstanceOptions {
  */
 export function useMapInstance({
   containerRef,
-  mapRef,
   landmarkMarkersRef,
+  mapRef,
+  onMapReady,
   theme,
 }: UseMapInstanceOptions): void {
   useEffect(() => {
@@ -37,11 +45,12 @@ export function useMapInstance({
       zoom: 13,
     });
     mapRef.current = mapInstance;
+    onMapReady(mapInstance);
 
     mapInstance.on("load", () => {
       addLandmarkMarkers(mapInstance, landmarkMarkersRef.current);
     });
-  }, [containerRef, landmarkMarkersRef, mapRef, theme]);
+  }, [containerRef, landmarkMarkersRef, mapRef, onMapReady, theme]);
 
   useEffect(
     () => () => {
@@ -51,7 +60,8 @@ export function useMapInstance({
       landmarkMarkersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
+      onMapReady(null);
     },
-    [landmarkMarkersRef, mapRef]
+    [landmarkMarkersRef, mapRef, onMapReady]
   );
 }
