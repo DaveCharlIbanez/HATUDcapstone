@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { isApproved } from "./lib/approval";
 import { quoteFare, quoteForTrip, roadDistanceKm } from "./lib/fare";
 import {
   requireRideAccessOrLegacy,
@@ -412,6 +413,9 @@ export const accept = mutation({
     if (!operator.isAvailable) {
       throw new Error("You must be online to accept a ride");
     }
+    if (!isApproved(operator)) {
+      throw new Error("Forbidden: your account is not approved yet");
+    }
 
     const now = Date.now();
     await ctx.db.patch(args.id, {
@@ -456,6 +460,7 @@ export const cancel = mutation({
     const now = Date.now();
     await ctx.db.patch(args.id, {
       status: "cancelled",
+      cancelledAt: now,
       updatedAt: now,
     });
 

@@ -252,7 +252,7 @@ async function seedDatabase(ctx: MutationCtx): Promise<void> {
     updatedAt: now,
   });
 
-  await ctx.db.insert("rides", {
+  const completedRideId = await ctx.db.insert("rides", {
     commuterId: firstCommuter._id,
     operatorId: operator1Id,
     pickup: {
@@ -269,6 +269,23 @@ async function seedDatabase(ctx: MutationCtx): Promise<void> {
     status: "completed",
     fare: 65.0,
     distance: 1.8,
+    paymentStatus: "paid",
+    paidAt: now - 3_600_000,
+    createdAt: now - 3_600_000,
+    updatedAt: now - 3_600_000,
+  });
+
+  // A settled payment for the completed ride, so the passenger's payment
+  // history matches the rides they have taken.
+  await ctx.db.insert("payments", {
+    rideId: completedRideId,
+    commuterId: firstCommuter._id,
+    amount: 65.0,
+    currency: "PHP",
+    provider: "gcash",
+    providerRef: "seed-gcash-0001",
+    referenceNumber: "HATUD-SEED-0001",
+    status: "SETTLED",
     createdAt: now - 3_600_000,
     updatedAt: now - 3_600_000,
   });
@@ -286,6 +303,77 @@ export const seed = internalMutation({
 
     await seedDatabase(ctx);
     return { message: "Seed completed successfully" };
+  },
+});
+
+/**
+ * Removes an account and everything attached to it.
+ *
+ * A development helper for clearing out throwaway sign-ups. It is internal
+ * and needs the seed key, so it cannot be reached from a client.
+ */
+export const removeDriver = internalMutation({
+  args: { email: v.string(), seedKey: v.string() },
+  handler: async (ctx, args) => {
+    requireSeedKey(args.seedKey);
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .first();
+    if (!user) {
+      return { message: "No such account" };
+    }
+
+    const operator = await ctx.db
+      .query("operators")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .first();
+
+    if (operator) {
+      const documents = await ctx.db
+        .query("operatorDocuments")
+        .withIndex("by_operatorId", (q) => q.eq("operatorId", operator._id))
+        .collect();
+      for (const document of documents) {
+        await ctx.db.delete(document._id);
+        const storageId = ctx.db.system.normalizeId(
+          "_storage",
+          document.storageId
+        );
+        if (storageId) {
+          await ctx.storage.delete(storageId);
+        }
+      }
+      await ctx.db.delete(operator._id);
+    }
+
+    const commuter = await ctx.db
+      .query("commuters")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .first();
+    if (commuter) {
+      await ctx.db.delete(commuter._id);
+    }
+
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const session of sessions) {
+      await ctx.db.delete(session._id);
+    }
+
+    const attempts = await ctx.db
+      .query("loginAttempts")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .collect();
+    for (const attempt of attempts) {
+      await ctx.db.delete(attempt._id);
+    }
+
+    await ctx.db.delete(user._id);
+    return { message: `Removed ${args.email}` };
   },
 });
 

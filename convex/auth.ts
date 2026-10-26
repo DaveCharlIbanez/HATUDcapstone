@@ -200,6 +200,9 @@ export const signup = mutation({
         licenseNumber: args.licenseNumber,
         vehicleInfo: args.vehicleInfo,
         isAvailable: false,
+        // A new driver waits for an admin to clear them before they can go
+        // online or accept a ride.
+        approvalStatus: "pending",
         currentLocation: undefined,
         createdAt: now,
         updatedAt: now,

@@ -38,4 +38,12 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- The driver credential upload opens the camera. Capacitor requests this
+         at runtime when a file input asks to capture, and the request is
+         denied silently if the permission is not declared here. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
 </manifest>

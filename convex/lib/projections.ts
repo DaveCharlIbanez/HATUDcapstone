@@ -7,7 +7,8 @@
  * role boundary must project explicitly.
  */
 
-import type { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
+import { approvalStatusOf } from "./approval";
 
 export type CommuterDoc = Doc<"commuters">;
 export type OperatorDoc = Doc<"operators">;
@@ -21,14 +22,18 @@ export interface CommuterSelfView {
 }
 
 export interface OperatorSelfView {
-  _id: OperatorDoc["_id"];
-  currentLocation: OperatorDoc["currentLocation"];
+  _id: Id<"operators">;
+  /** Where the driver is in the approval flow. */
+  approvalStatus: "approved" | "pending" | "rejected";
+  currentLocation: Doc<"operators">["currentLocation"];
   email: string;
   isAvailable: boolean;
   licenseNumber: string;
   name: string;
   phone: string;
-  vehicleInfo: OperatorDoc["vehicleInfo"];
+  /** Why the last application was refused, if it was. */
+  rejectionNote: string | null;
+  vehicleInfo: Doc<"operators">["vehicleInfo"];
 }
 
 /** What a passenger may see of the driver they are matched with. */
@@ -75,10 +80,12 @@ export function projectCommuterSelf(commuter: CommuterDoc): CommuterSelfView {
 export function projectOperatorSelf(operator: OperatorDoc): OperatorSelfView {
   return {
     _id: operator._id,
+    approvalStatus: approvalStatusOf(operator),
     name: operator.name,
     email: operator.email,
     phone: operator.phone,
     licenseNumber: operator.licenseNumber,
+    rejectionNote: operator.rejectionNote ?? null,
     vehicleInfo: operator.vehicleInfo,
     isAvailable: operator.isAvailable,
     currentLocation: operator.currentLocation,

@@ -73,3 +73,37 @@ export const update = mutation({
     await ctx.db.patch(args.id, updates);
   },
 });
+
+/**
+ * Clear or refuse a driver application.
+ *
+ * Approval means "may drive", not "is on shift": the driver still has to go
+ * online themselves, so the approval also takes them offline. A refusal can
+ * carry a note, which the driver sees on their application screen so they
+ * know what to fix.
+ */
+export const setOperatorApproval = mutation({
+  args: {
+    sessionToken: v.string(),
+    id: v.id("operators"),
+    approvalStatus: v.union(v.literal("approved"), v.literal("rejected")),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, args.sessionToken, "admin");
+
+    const operator = await ctx.db.get(args.id);
+    if (!operator) {
+      throw new Error("Operator not found");
+    }
+
+    const note = args.note?.trim();
+
+    await ctx.db.patch(args.id, {
+      approvalStatus: args.approvalStatus,
+      rejectionNote: args.approvalStatus === "rejected" ? note : undefined,
+      isAvailable: false,
+      updatedAt: Date.now(),
+    });
+  },
+});

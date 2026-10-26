@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { isApproved } from "./lib/approval";
 import {
   requireOperatorVisibleOrLegacy,
   requireRoleOrLegacy,
@@ -131,6 +132,14 @@ export const setAvailability = mutation({
   handler: async (ctx, args) => {
     await requireOperatorOwnership(ctx, args.sessionToken, args.id);
 
+    const operator = await ctx.db.get(args.id);
+    if (!operator) {
+      throw new Error("Operator not found");
+    }
+    if (!isApproved(operator)) {
+      throw new Error("Forbidden: your account is not approved yet");
+    }
+
     const patch: {
       isAvailable: boolean;
       currentLocation?: { latitude: number; longitude: number };
@@ -195,13 +204,26 @@ export const update = mutation({
       updatedAt: number;
     } = { updatedAt: Date.now() };
     if (args.name !== undefined) {
-      updates.name = args.name;
+      const name = args.name.trim();
+      if (!name) {
+        throw new Error("Name cannot be empty");
+      }
+      updates.name = name;
     }
     if (args.phone !== undefined) {
       updates.phone = args.phone;
     }
     if (args.vehicleInfo !== undefined) {
-      updates.vehicleInfo = args.vehicleInfo;
+      const plateNumber = args.vehicleInfo.plateNumber.trim();
+      const model = args.vehicleInfo.model.trim();
+      if (!(plateNumber && model)) {
+        throw new Error("Plate number and vehicle model are required");
+      }
+      updates.vehicleInfo = {
+        plateNumber,
+        model,
+        color: args.vehicleInfo.color.trim(),
+      };
     }
 
     await ctx.db.patch(args.id, updates);

@@ -50,6 +50,18 @@ export default defineSchema({
       color: v.string(),
     }),
     isAvailable: v.boolean(),
+    // Optional so the field can be added without a backfill: an operator
+    // without a value predates the approval flow and counts as approved.
+    approvalStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("approved"),
+        v.literal("rejected")
+      )
+    ),
+    // Why the last application was refused, shown to the driver so they can
+    // fix it and resubmit.
+    rejectionNote: v.optional(v.string()),
     currentLocation: v.optional(
       v.object({
         latitude: v.number(),
@@ -62,6 +74,26 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_license", ["licenseNumber"])
     .index("by_isAvailable", ["isAvailable"]),
+
+  // The credential documents a driver uploads for review. One row per
+  // document kind, so a replacement never rewrites the operator record.
+  operatorDocuments: defineTable({
+    operatorId: v.id("operators"),
+    kind: v.union(
+      v.literal("license"),
+      v.literal("registration"),
+      v.literal("officialReceipt"),
+      v.literal("insurance")
+    ),
+    storageId: v.string(),
+    contentType: v.string(),
+    size: v.number(),
+    fileName: v.optional(v.string()),
+    uploadedAt: v.number(),
+    replacedCount: v.optional(v.number()),
+  })
+    .index("by_operatorId", ["operatorId"])
+    .index("by_operatorId_and_kind", ["operatorId", "kind"]),
 
   admins: defineTable({
     userId: v.id("users"),
@@ -105,6 +137,9 @@ export default defineSchema({
     ),
     fare: v.number(),
     distance: v.number(),
+    // When the request was dropped. `updatedAt` cannot be used for this: it
+    // is bumped by every unrelated patch on the ride.
+    cancelledAt: v.optional(v.number()),
     paymentStatus: v.optional(
       v.union(
         v.literal("unpaid"),
