@@ -2,8 +2,9 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
-import { FaSpinner } from "react-icons/fa";
+import { AppLoader } from "@/components/AppLoader";
 import { useAuth } from "@/lib/authContext";
+import { ROLE_HOME } from "@/lib/roles";
 
 /**
  * The single client-side access gate.
@@ -15,7 +16,8 @@ import { useAuth } from "@/lib/authContext";
  */
 const ROUTE_ROLES: {
   prefix: string;
-  role?: "admin" | "operator" | "commuter";
+  /** "any" means the route is for every signed-in role. */
+  role?: "admin" | "any" | "operator" | "commuter";
 }[] = [
   { prefix: "/admin", role: "admin" },
   { prefix: "/operator", role: "operator" },
@@ -23,15 +25,14 @@ const ROUTE_ROLES: {
   { prefix: "/profile", role: "commuter" },
   { prefix: "/payment", role: "commuter" },
   { prefix: "/feedback", role: "commuter" },
+  // The shell's own pages are for everybody who is signed in.
+  { prefix: "/dashboard", role: "any" },
+  { prefix: "/settings", role: "any" },
+  { prefix: "/help", role: "any" },
 ];
 
-/** Where each role belongs. Operators live on the map, which is the single
- * operator dashboard. */
-const ROLE_HOME: Record<string, string> = {
-  admin: "/admin",
-  operator: "/operator/map",
-  commuter: "/map",
-};
+/** Where each role belongs. Everyone lands on the dashboard, and the map is
+ * one tap away in the drawer. */
 
 function matchRoute(pathname: string) {
   return ROUTE_ROLES.find(
@@ -56,18 +57,14 @@ export function RouteGuard({ children }: { children: ReactNode }) {
       router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
       return;
     }
-    if (requiredRole && user.role !== requiredRole) {
-      router.replace(ROLE_HOME[user.role] ?? "/map");
+    if (requiredRole && requiredRole !== "any" && user.role !== requiredRole) {
+      router.replace(ROLE_HOME[user.role] ?? "/dashboard");
     }
   }, [isLoading, route, requiredRole, user, pathname, router]);
 
   // Avoid flashing protected content before auth resolves / redirect fires.
   if (route && (isLoading || !user)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
-        <FaSpinner className="animate-spin text-2xl text-sky-400" />
-      </div>
-    );
+    return <AppLoader variant="full" />;
   }
 
   return <>{children}</>;

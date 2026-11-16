@@ -4,14 +4,30 @@ import { useMutation, useQuery } from "convex/react";
 import maplibregl from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
-import { getRoute } from "@/lib/mapClient";
+import { locationSettingsHint } from "@/lib/geolocation";
+import type { RouteInfo } from "@/lib/mapClient";
 import {
+  COMMUTER_PIN_COLOR,
+  COMMUTER_PIN_GLYPH,
   createPartnerMarkerElement,
-  createSelfMarkerElement,
+  DRIVER_PIN_COLOR,
+  DRIVER_PIN_GLYPH,
+  MOVING_MARKER_OPTIONS,
   setMarkerStale,
 } from "@/lib/mapMarkers";
+import { routeLegForRide } from "@/lib/mapRoute";
+import { tripModeFor } from "@/lib/tripMode";
+import { useRouteLine } from "@/lib/useRouteLine";
+import {
+  type SimulatedVehicle,
+  useSimulatedVehicle,
+} from "@/lib/useSimulatedVehicle";
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
+import {
+  driverHasArrived,
+  driverIsStillOnTheWay,
+} from "../../../convex/lib/arrival";
 
 /** How often the rider's position is pushed to the server. */
 const LOCATION_PUSH_INTERVAL_MS = 5000;
@@ -19,19 +35,34 @@ const LOCATION_PUSH_INTERVAL_MS = 5000;
 /** A position older than this is drawn greyed out. */
 const LOCATION_STALE_MS = 30_000;
 
-/** How often the road between the driver and the next stop is re-drawn. */
-const ROUTE_REDRAW_INTERVAL_MS = 15_000;
-
-const ROUTE_LAYER_ID = "commuter-route";
-const ROUTE_SOURCE_ID = "commuter-route";
-const OPERATOR_PIN_COLOR = "#2563eb";
-const SELF_PIN_COLOR = "#0ea5e9";
-
 interface UseRideLocationOptions {
   activeRide: Doc<"rides"> | null;
   mapInstance: maplibregl.Map | null;
   sessionToken: string | null;
 }
+
+/** What the hook hands back to the screen that owns it. */
+export interface UseRideLocationResult {
+  /** The driver is close enough to the pickup point to be there. */
+  isDriverArrived: boolean;
+  /** The driver is demonstrably still on the way, so the trip cannot start. */
+  isDriverOnTheWay: boolean;
+  /** The driver's last reported position, if there is one. */
+  operatorLocation: Doc<"rides">["operatorLocation"] | null;
+  /** What the road says about the time it takes. */
+  route: RouteInfo | null;
+  /** The simulated trip, once it has started. */
+  trip: SimulatedVehicle;
+}
+
+/**
+ * How close the driver has to be to the pickup point to count as arrived.
+ *
+ * A hundred metres is roughly the length of a street block, which is as close
+ * as a GPS fix on a phone can honestly claim. The rule itself lives in
+ * `convex/lib/arrival.ts`, because the server refuses a confirmation that
+ * comes while the driver is still on the way, and the two have to agree.
+ */
 
 /**
  * Shares the rider's position with the driver, and shows the driver back.
@@ -44,7 +75,7 @@ export function useRideLocation({
   activeRide,
   mapInstance,
   sessionToken,
-}: UseRideLocationOptions): void {
+}: UseRideLocationOptions): UseRideLocationResult {
   const { showToast } = useToast();
   const [sharingError, setSharingError] = useState<string | null>(null);
   const livePositionRef = useRef<{
@@ -54,8 +85,6 @@ export function useRideLocation({
   const operatorMarkerRef = useRef<maplibregl.Marker | null>(null);
   const selfMarkerRef = useRef<maplibregl.Marker | null>(null);
   const markerMapRef = useRef<maplibregl.Map | null>(null);
-  const lastRouteDrawRef = useRef(0);
-  const lastRouteTargetRef = useRef<string | null>(null);
 
   const updateCommuterLocationMutation = useMutation(
     api.rides.updateCommuterLocation
@@ -69,29 +98,96 @@ export function useRideLocation({
   );
   const operatorLocation =
     partnerLocation && "operatorLocation" in partnerLocation
-      ? partnerLocation.operatorLocation
+      ? (partnerLocation.operatorLocation ?? null)
       : null;
 
-  // Where the driver is heading: the pickup point until the ride starts, the
-  // destination afterwards.
-  const routeTarget = useMemo(() => {
-    if (!activeRide) {
-      return null;
-    }
-    return activeRide.status === "inProgress"
-      ? activeRide.dropoff
-      : activeRide.pickup;
-  }, [activeRide]);
+  // The road the vehicle is taking: to the pickup until the ride starts, the
+  // destination afterwards. The same rule the operator's map uses.
+  const routeLeg = useMemo(() => routeLegForRide(activeRide), [activeRide]);
 
-  const rideId = activeRide?._id ?? null;
-  const rideStatus = activeRide?.status ?? null;
+  // On a demo trip the vehicle is driven along the road by the server once
+  // the trip starts, and the road is drawn from that, shrinking behind the
+  // vehicle. A live trip keeps following GPS the whole way.
+  // GPS is what moves the pins: while the driver is on the way, and for the
+  // whole of a live trip.
+  const { isFollowingGps: isTrackingGps, isSimulating: isTripUnderWay } =
+    tripModeFor(activeRide);
+
+  // The road the driver is taking, and how long it takes. The router measures
+  // the road as it draws it, so the time comes with it. During the trip the
+  // simulation draws the road instead.
+  const { route } = useRouteLine({
+    map: mapInstance,
+    origin: operatorLocation,
+    phase: routeLeg.phase,
+    target: isTripUnderWay ? null : routeLeg.target,
+  });
+
+  // The passenger is in the vehicle, so both pins ride along with it.
+  const trip = useSimulatedVehicle({
+    follow: true,
+    getMarkers: () => [operatorMarkerRef.current, selfMarkerRef.current],
+    map: mapInstance,
+    rideId: isTripUnderWay && activeRide ? activeRide._id : null,
+    sessionToken,
+  });
 
   /**
-   * Push the rider's position to the server for as long as the ride is live.
+   * The map follows the driver while the ride is live.
+   *
+   * The road is drawn from wherever the driver is, so a map that does not
+   * follow them shows a road they cannot see — the live route is only live if
+   * it is on the screen.
+   *
+   * A rider who takes the map into their own hands keeps it: dragging stops
+   * the following, because a map that pulls itself back is a map nobody can
+   * read.
+   */
+  const followingRef = useRef(true);
+
+  useEffect(() => {
+    if (!mapInstance) {
+      return;
+    }
+    const onDragStart = () => {
+      followingRef.current = false;
+    };
+    mapInstance.on("dragstart", onDragStart);
+    return () => {
+      mapInstance.off("dragstart", onDragStart);
+    };
+  }, [mapInstance]);
+
+  useEffect(() => {
+    // During a demo trip the simulation keeps the camera on the vehicle.
+    if (
+      !(
+        mapInstance &&
+        isTrackingGps &&
+        operatorLocation &&
+        followingRef.current
+      )
+    ) {
+      return;
+    }
+    mapInstance.easeTo({
+      center: [operatorLocation.longitude, operatorLocation.latitude],
+      duration: 900,
+      zoom: 15,
+    });
+  }, [isTrackingGps, mapInstance, operatorLocation]);
+
+  const rideId = activeRide?._id ?? null;
+
+  /**
+   * Push the rider's position to the server while the driver is on the way,
+   * and for the whole of a live trip.
+   *
+   * Once a demo trip starts the passenger is in the vehicle, which the
+   * simulation drives, so their GPS is no longer sent.
    */
   useEffect(() => {
-    const isLive = rideStatus === "accepted" || rideStatus === "inProgress";
-    if (!(isLive && rideId && sessionToken)) {
+    if (!(isTrackingGps && rideId && sessionToken)) {
       return;
     }
     if (!("geolocation" in navigator)) {
@@ -115,7 +211,9 @@ export function useRideLocation({
         }
         warned = true;
         setSharingError(
-          "Location sharing is off, so your driver cannot see where you are."
+          error.code === error.PERMISSION_DENIED
+            ? `Location sharing is off, so your driver cannot see where you are. ${locationSettingsHint()}`
+            : "Your position could not be determined, so your driver cannot see where you are. Please try again."
         );
         console.error("Location watch failed:", error);
       },
@@ -146,7 +244,7 @@ export function useRideLocation({
       clearInterval(interval);
       navigator.geolocation.clearWatch(watchId);
     };
-  }, [rideId, rideStatus, sessionToken, updateCommuterLocationMutation]);
+  }, [isTrackingGps, rideId, sessionToken, updateCommuterLocationMutation]);
 
   /**
    * The toast is raised from state rather than from the watcher, so a new
@@ -160,7 +258,10 @@ export function useRideLocation({
   }, [sharingError, showToast]);
 
   /**
-   * Draw the driver's live position and the road to the next stop.
+   * Draw the driver's live position.
+   *
+   * The road is drawn by the shared hook, so both screens show the same road
+   * in the same colour.
    */
   useEffect(() => {
     if (!mapInstance) {
@@ -175,24 +276,13 @@ export function useRideLocation({
       selfMarkerRef.current?.remove();
       selfMarkerRef.current = null;
       markerMapRef.current = mapInstance;
-      lastRouteDrawRef.current = 0;
     }
-
-    const clearRoute = () => {
-      if (mapInstance.getLayer(ROUTE_LAYER_ID)) {
-        mapInstance.removeLayer(ROUTE_LAYER_ID);
-      }
-      if (mapInstance.getSource(ROUTE_SOURCE_ID)) {
-        mapInstance.removeSource(ROUTE_SOURCE_ID);
-      }
-    };
 
     if (!operatorLocation) {
       operatorMarkerRef.current?.remove();
       operatorMarkerRef.current = null;
       selfMarkerRef.current?.remove();
       selfMarkerRef.current = null;
-      clearRoute();
       return;
     }
 
@@ -202,19 +292,27 @@ export function useRideLocation({
     ];
 
     if (operatorMarkerRef.current) {
-      operatorMarkerRef.current.setLngLat(position);
+      // During a demo trip the simulation moves the pin smoothly; setting it
+      // here as well would make it hop back and forth.
+      if (!isTripUnderWay) {
+        operatorMarkerRef.current.setLngLat(position);
+      }
     } else {
       operatorMarkerRef.current = new maplibregl.Marker({
-        element: createPartnerMarkerElement("🏍️", OPERATOR_PIN_COLOR),
+        ...MOVING_MARKER_OPTIONS,
+        element: createPartnerMarkerElement(DRIVER_PIN_GLYPH, DRIVER_PIN_COLOR),
       })
         .setLngLat(position)
         .addTo(mapInstance);
     }
 
+    // During a demo trip the simulation drives the pin, so an old GPS
+    // position does not make it stale.
     setMarkerStale(
       operatorMarkerRef.current.getElement(),
-      Date.now() - operatorLocation.updatedAt > LOCATION_STALE_MS,
-      OPERATOR_PIN_COLOR
+      !isTripUnderWay &&
+        Date.now() - operatorLocation.updatedAt > LOCATION_STALE_MS,
+      DRIVER_PIN_COLOR
     );
 
     // The rider's own position, so the driver and the destination can be
@@ -223,60 +321,43 @@ export function useRideLocation({
     if (live) {
       const selfPosition: [number, number] = [live.longitude, live.latitude];
       if (selfMarkerRef.current) {
-        selfMarkerRef.current.setLngLat(selfPosition);
+        if (!isTripUnderWay) {
+          selfMarkerRef.current.setLngLat(selfPosition);
+        }
       } else {
         selfMarkerRef.current = new maplibregl.Marker({
-          element: createSelfMarkerElement(SELF_PIN_COLOR),
+          ...MOVING_MARKER_OPTIONS,
+          element: createPartnerMarkerElement(
+            COMMUTER_PIN_GLYPH,
+            COMMUTER_PIN_COLOR
+          ),
         })
           .setLngLat(selfPosition)
           .addTo(mapInstance);
       }
     }
+  }, [isTripUnderWay, mapInstance, operatorLocation]);
 
-    if (!routeTarget) {
-      return;
-    }
-
-    // The road is redrawn on a slower cadence than the marker moves, so a
-    // moving driver does not trigger a route request every few seconds.
-    const targetKey = `${routeTarget.latitude},${routeTarget.longitude}`;
-    const now = Date.now();
-    const targetChanged = lastRouteTargetRef.current !== targetKey;
-    if (
-      !targetChanged &&
-      now - lastRouteDrawRef.current < ROUTE_REDRAW_INTERVAL_MS
-    ) {
-      return;
-    }
-    lastRouteTargetRef.current = targetKey;
-    lastRouteDrawRef.current = now;
-
-    const drawRoute = async () => {
-      const route = await getRoute(position, [
-        routeTarget.longitude,
-        routeTarget.latitude,
-      ]);
-      if (!(route && mapInstance)) {
-        return;
+  // Where the driver has got to, and whether that means the trip can start.
+  //
+  // It only matters while the ride is waiting for the passenger's
+  // confirmation: once the trip has begun, the driver is on the road to the
+  // destination and the question no longer arises.
+  const arrival = activeRide
+    ? {
+        operatorLocation: activeRide.operatorLocation ?? null,
+        pickup: activeRide.pickup,
       }
-      clearRoute();
-      mapInstance.addSource(ROUTE_SOURCE_ID, {
-        type: "geojson",
-        data: { type: "Feature", properties: {}, geometry: route },
-      });
-      mapInstance.addLayer({
-        id: ROUTE_LAYER_ID,
-        type: "line",
-        source: ROUTE_SOURCE_ID,
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: {
-          "line-color": OPERATOR_PIN_COLOR,
-          "line-width": 4,
-          "line-opacity": 0.7,
-        },
-      });
-    };
+    : null;
+  const isWaitingForConfirmation = activeRide?.status === "accepted";
 
-    drawRoute();
-  }, [mapInstance, operatorLocation, routeTarget]);
+  const isDriverArrived =
+    isWaitingForConfirmation && arrival ? driverHasArrived(arrival) : false;
+
+  const isDriverOnTheWay =
+    isWaitingForConfirmation && arrival
+      ? driverIsStillOnTheWay(arrival)
+      : false;
+
+  return { isDriverArrived, isDriverOnTheWay, operatorLocation, route, trip };
 }

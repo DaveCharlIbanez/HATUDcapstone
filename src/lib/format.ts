@@ -2,13 +2,17 @@
  * Shared display helpers for the rider and driver profile screens.
  */
 
-/** Friendly names for the vehicle classes a ride can be booked with. */
-export const VEHICLE_LABELS: Record<string, string> = {
-  standard: "Standard",
-  priority: "Priority",
-  motorcycle_standard: "Motorcycle",
-  motorcycle_with_pillion: "Motorcycle w/ Pillion",
-  motorcycle_family: "Family",
+/**
+ * Friendly names for the ways a ride can be paid for.
+ *
+ * The rider chooses one when they book, and the ride carries it for its whole
+ * life — the driver has to know before they accept whether they are
+ * collecting cash.
+ */
+export const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  gcash: "GCash",
+  maya: "Maya",
 };
 
 /** Badge colours for a ride status. */
@@ -50,9 +54,87 @@ export function formatMonthYear(timestamp: number): string {
   });
 }
 
-export function vehicleLabel(vehicleType: string | null): string {
-  if (!vehicleType) {
-    return "Ride";
+/**
+ * The name of the way a ride is paid for.
+ *
+ * A ride that predates the choice has no method, and it is read as GCash —
+ * which is what it was settled through.
+ */
+export function paymentMethodLabel(method: string | null | undefined): string {
+  if (!method) {
+    return "Not recorded";
   }
-  return VEHICLE_LABELS[vehicleType] ?? vehicleType;
+  return PAYMENT_METHOD_LABELS[method] ?? method;
+}
+
+/**
+ * How long a road takes, said as an estimate.
+ *
+ * The router measures the road as it draws it. The public server has no live
+ * traffic, so the number is the time the road takes at its own speed profile
+ * and not a promise about the traffic on it — which is why it is always
+ * "about", and never a bare number.
+ */
+export function formatEta(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || seconds <= 0) {
+    return "";
+  }
+
+  const minutes = Math.round(seconds / 60);
+
+  if (seconds < 60) {
+    return "less than a minute";
+  }
+  if (minutes < 60) {
+    return `about ${minutes} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (remainder === 0) {
+    return `about ${hours} h`;
+  }
+  return `about ${hours} h ${remainder} min`;
+}
+
+/**
+ * A distance, said the way a driver would say it.
+ *
+ * Below a kilometre it is in metres, because "140 m" is more use to somebody
+ * looking for a house than "0.14 km".
+ */
+export function formatDistance(meters: number | null | undefined): string {
+  if (meters === null || meters === undefined || meters <= 0) {
+    return "";
+  }
+  if (meters < 1000) {
+    return `${Math.round(meters)} m`;
+  }
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+/**
+ * How long ago a moment was, briefly: "just now", "45s ago", "3 min ago",
+ * "2 h ago", or the date when it is more than a day back.
+ */
+export function formatSince(
+  timestamp: number,
+  now: number = Date.now()
+): string {
+  const seconds = Math.max(0, Math.round((now - timestamp) / 1000));
+  if (seconds < 10) {
+    return "just now";
+  }
+  if (seconds < 60) {
+    return `${seconds}s ago`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes} min ago`;
+  }
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) {
+    return `${hours} h ago`;
+  }
+  return formatDate(timestamp);
 }

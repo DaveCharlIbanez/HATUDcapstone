@@ -1,12 +1,7 @@
 import { expect, test } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
-import {
-  FARE_RATES,
-  haversineKm,
-  quoteFare,
-  quoteForTrip,
-  roadDistanceKm,
-} from "../../convex/lib/fare";
+import { FARE_RATES, quoteFare } from "../../convex/lib/fare";
+import { estimateRoadKm, haversineKm } from "../../convex/lib/routing";
 import { createTest, seedAccount, seedRide } from "./helpers";
 
 const PICKUP = { latitude: 14.5995, longitude: 120.9842 };
@@ -22,29 +17,31 @@ test("a trip inside the included distance costs the base fare", () => {
 test("the meter starts beyond the included distance and rounds up per kilometre", () => {
   const quote = quoteFare("standard", 5.2);
   expect(quote.meteredKm).toBe(4);
-  expect(quote.meteredAmount).toBe(40);
-  expect(quote.fare).toBe(70);
+  expect(quote.meteredAmount).toBe(48);
+  expect(quote.fare).toBe(78);
 });
 
 test("a fraction of a kilometre still bills a whole kilometre", () => {
   const quote = quoteFare("standard", 2.1);
   expect(quote.meteredKm).toBe(1);
-  expect(quote.fare).toBe(40);
+  expect(quote.fare).toBe(42);
 });
 
-test("the priority tariff is higher on both the base fee and the meter", () => {
-  expect(FARE_RATES.priority.base).toBeGreaterThan(FARE_RATES.standard.base);
-  expect(FARE_RATES.priority.perKm).toBeGreaterThan(FARE_RATES.standard.perKm);
-  expect(quoteFare("priority", 5.2).fare).toBeGreaterThan(
-    quoteFare("standard", 5.2).fare
-  );
+test("the tariff is thirty pesos and twelve a kilometre", () => {
+  expect(FARE_RATES.standard.base).toBe(30);
+  expect(FARE_RATES.standard.perKm).toBe(12);
+  expect(FARE_RATES.standard.includedKm).toBe(2);
 });
 
-test("the road distance is greater than the straight-line distance", () => {
+test("there is one ride type, and it has one tariff", () => {
+  expect(Object.keys(FARE_RATES)).toEqual(["standard"]);
+});
+
+test("the estimated road distance is greater than the straight-line distance", () => {
   const straight = haversineKm(PICKUP, DROPOFF);
-  const road = roadDistanceKm(PICKUP, DROPOFF);
+  const road = estimateRoadKm(PICKUP, DROPOFF);
   expect(road).toBeGreaterThan(straight);
-  expect(road).toBeCloseTo(straight * 1.3, 2);
+  expect(road).toBeCloseTo(straight * 1.18, 2);
 });
 
 test("a ride stores the server-computed fare and ignores the client's", async () => {
@@ -56,23 +53,71 @@ test("a ride stores the server-computed fare and ignores the client's", async ()
     role: "commuter",
   });
 
-  const expected = quoteForTrip("standard", PICKUP, DROPOFF);
-
-  const rideId = await t.mutation(api.rides.create, {
+  const { rideId } = await t.action(api.rides.create, {
     sessionToken: commuter.sessionToken,
     commuterId: commuter.commuterId,
     pickup: { ...PICKUP, address: "Pickup" },
     dropoff: { ...DROPOFF, address: "Dropoff" },
     vehicleType: "standard",
+    paymentMethod: "gcash",
     // A client trying to pay ₱1.
     fare: 1,
     distance: 9999,
   });
 
+  // The router is stubbed to report five kilometres.
   const ride = await t.run(async (ctx) => await ctx.db.get(rideId));
-  expect(ride?.fare).toBe(expected.fare);
-  expect(ride?.distance).toBe(expected.distanceKm);
+  expect(ride?.distance).toBe(5);
+  expect(ride?.fare).toBe(quoteFare("standard", 5).fare);
   expect(ride?.fare).not.toBe(1);
+});
+
+test("a booking that asks for the old Priority ride is booked as the one that exists", async () => {
+  const t = createTest();
+  const commuter = await seedAccount(t, {
+    email: "legacy-priority@example.com",
+    name: "Legacy Booker",
+    phone: "+639000000110",
+    role: "commuter",
+  });
+
+  // The Android builds that predate the single ride type still send
+  // "priority". There is no Priority ride any more, and they are booked as
+  // the ride that exists — at the fare they were quoted.
+  const { rideId } = await t.action(api.rides.create, {
+    sessionToken: commuter.sessionToken,
+    commuterId: commuter.commuterId,
+    pickup: { ...PICKUP, address: "Pickup" },
+    dropoff: { ...DROPOFF, address: "Dropoff" },
+    vehicleType: "priority",
+    paymentMethod: "gcash",
+  });
+
+  const ride = await t.run(async (ctx) => await ctx.db.get(rideId));
+  expect(ride?.vehicleType).toBe("standard");
+});
+
+test("a booking without a ride type is booked as the one that exists", async () => {
+  const t = createTest();
+  const commuter = await seedAccount(t, {
+    email: "no-type@example.com",
+    name: "Type-less Booker",
+    phone: "+639000000111",
+    role: "commuter",
+  });
+
+  // There is one ride type, so it is not a parameter the rider chooses: the
+  // client does not send it at all.
+  const { rideId } = await t.action(api.rides.create, {
+    sessionToken: commuter.sessionToken,
+    commuterId: commuter.commuterId,
+    pickup: { ...PICKUP, address: "Pickup" },
+    dropoff: { ...DROPOFF, address: "Dropoff" },
+    paymentMethod: "gcash",
+  });
+
+  const ride = await t.run(async (ctx) => await ctx.db.get(rideId));
+  expect(ride?.vehicleType).toBe("standard");
 });
 
 test("the quote matches the fare the ride is created with", async () => {
@@ -84,24 +129,25 @@ test("the quote matches the fare the ride is created with", async () => {
     role: "commuter",
   });
 
-  const quote = await t.query(api.rides.getFareQuote, {
+  const quote = await t.action(api.rides.quoteFare, {
     sessionToken: commuter.sessionToken,
     pickup: PICKUP,
     dropoff: DROPOFF,
   });
 
-  const rideId = await t.mutation(api.rides.create, {
+  const { rideId } = await t.action(api.rides.create, {
     sessionToken: commuter.sessionToken,
     commuterId: commuter.commuterId,
     pickup: { ...PICKUP, address: "Pickup" },
     dropoff: { ...DROPOFF, address: "Dropoff" },
-    vehicleType: "priority",
+    paymentMethod: "gcash",
   });
 
   const ride = await t.run(async (ctx) => await ctx.db.get(rideId));
-  expect(ride?.fare).toBe(quote.priority.fare);
-  expect(quote.standard.fare).toBeLessThan(quote.priority.fare);
-  expect(quote.distanceKm).toBe(roadDistanceKm(PICKUP, DROPOFF));
+  expect(ride?.fare).toBe(quote.standard.fare);
+  // The quote and the booking are charged on the same measurement.
+  expect(quote.distanceKm).toBe(5);
+  expect(ride?.distance).toBe(quote.distanceKm);
 });
 
 test("a driver cannot accept a second ride while one is live", async () => {
@@ -131,7 +177,7 @@ test("a driver cannot accept a second ride while one is live", async () => {
       id: secondRide,
       operatorId: operator.operatorId,
     })
-  ).rejects.toThrow("You already have an active ride");
+  ).rejects.toThrow("Finish your current ride before taking another.");
 
   // The live ride is untouched by the rejected attempt.
   const ride = await t.run(async (ctx) => await ctx.db.get(firstRide));
@@ -165,10 +211,10 @@ test("a driver who is offline cannot accept a ride", async () => {
       id: rideId,
       operatorId: operator.operatorId,
     })
-  ).rejects.toThrow("You must be online to accept a ride");
+  ).rejects.toThrow("Go online to start taking rides.");
 });
 
-test("cancelling a ride releases the driver", async () => {
+test("cancelling a ride leaves the driver's shift alone", async () => {
   const t = createTest();
   const commuter = await seedAccount(t, {
     email: "canceller@example.com",
@@ -184,6 +230,8 @@ test("cancelling a ride releases the driver", async () => {
   });
 
   const rideId = await seedRide(t, commuter.commuterId, {
+    // Inside the passenger's 1-minute cancel window (fixoct46).
+    acceptedAt: Date.now(),
     operatorId: operator.operatorId,
     status: "accepted",
   });
@@ -197,10 +245,12 @@ test("cancelling a ride releases the driver", async () => {
     id: rideId,
   });
 
-  const released = await t.run(
+  // The shift is the driver's own decision. Cancelling a ride used to put
+  // them back on shift, which meant a driver could never actually go offline.
+  const afterCancel = await t.run(
     async (ctx) => await ctx.db.get(operator.operatorId)
   );
-  expect(released?.isAvailable).toBe(true);
+  expect(afterCancel?.isAvailable).toBe(false);
 });
 
 test("the session purge removes expired and revoked sessions only", async () => {

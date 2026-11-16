@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { FaSpinner } from "react-icons/fa";
+import { AppLoader } from "@/components/AppLoader";
 
 /**
  * The operator map used to live at /operator/map while /operator was a
@@ -18,9 +18,5 @@ export default function OperatorRedirectPage() {
     router.replace("/operator/map");
   }, [router]);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
-      <FaSpinner className="animate-spin text-2xl text-sky-400" />
-    </div>
-  );
+  return <AppLoader variant="full" />;
 }

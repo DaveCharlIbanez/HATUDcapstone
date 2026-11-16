@@ -8,15 +8,23 @@ import {
   type Municipality,
 } from "@/lib/landmarks";
 import type { PlaceSuggestion } from "@/lib/mapClient";
+import { DemoModeToggle } from "./DemoModeToggle";
 
 interface LocationStepProps {
+  /** The trip will be simulated instead of following GPS. */
+  demoMode: boolean;
   dropoff: string;
   filteredLandmarks: Landmark[];
   isLocating: boolean;
   locationError: string | null;
-  onChooseRide: () => void;
+  /** A standing notice that the driver will not be able to see the rider. */
+  locationNotice: string | null;
+  /** On to the payment step. */
+  onContinue: () => void;
+  onDemoModeChange: (enabled: boolean) => void;
   onPickupSearch: (value: string) => void;
   onPickupSelect: (place: PlaceSuggestion) => void;
+  onRequestLocation: () => void;
   onSelectLandmark: (landmark: Landmark) => void;
   onSelectMunicipality: (municipality: Municipality | "all") => void;
   onToggleLandmarkDropdown: () => void;
@@ -29,22 +37,26 @@ interface LocationStepProps {
 }
 
 export function LocationStep({
+  demoMode,
+  onDemoModeChange,
   pickup,
   dropoff,
   pickupSuggestions,
   filteredLandmarks,
   locationError,
+  locationNotice,
   isLocating,
   theme,
   showLandmarkDropdown,
   selectedMunicipality,
   onPickupSearch,
   onPickupSelect,
+  onRequestLocation,
   onUseMyLocation,
   onToggleLandmarkDropdown,
   onSelectMunicipality,
   onSelectLandmark,
-  onChooseRide,
+  onContinue,
 }: LocationStepProps) {
   return (
     <>
@@ -86,6 +98,19 @@ export function LocationStep({
           </div>
         )}
 
+        {locationNotice ? (
+          <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-amber-600 text-sm dark:text-amber-400">
+            <span>{locationNotice}</span>
+            <button
+              className="shrink-0 rounded-lg bg-amber-400 px-2.5 py-1 font-semibold text-amber-950 text-xs transition hover:bg-amber-300"
+              onClick={onRequestLocation}
+              type="button"
+            >
+              Turn on
+            </button>
+          </div>
+        ) : null}
+
         {pickupSuggestions.map((place) => (
           <button
             className="block w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-3 text-left text-[var(--foreground)] transition hover:border-[var(--border)] hover:bg-[var(--surface)]"
@@ -110,6 +135,10 @@ export function LocationStep({
             {dropoff || "Select destination"}
           </button>
         </div>
+
+        {/* Always rendered, always the same size: switching it only changes
+            what the row says, so the fields around it never move. */}
+        <DemoModeToggle enabled={demoMode} onChange={onDemoModeChange} />
       </div>
 
       {showLandmarkDropdown && (
@@ -166,10 +195,10 @@ export function LocationStep({
       {dropoff && pickup && (
         <button
           className="mt-4 w-full rounded-2xl border-2 border-sky-500/50 bg-sky-600 py-4 font-bold text-base text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-500"
-          onClick={onChooseRide}
+          onClick={onContinue}
           type="button"
         >
-          Choose a ride
+          Continue
         </button>
       )}
     </>

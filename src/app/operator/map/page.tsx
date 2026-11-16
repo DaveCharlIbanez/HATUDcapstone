@@ -1,47 +1,126 @@
 "use client";
 
 import maplibregl from "maplibre-gl";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
-import { FaCheckCircle, FaMapMarkerAlt, FaPhone } from "react-icons/fa";
-import { ChatBubble } from "@/components/ChatBubble";
+import { AppMenuButton } from "@/components/AppShell";
+import { RecenterButton } from "@/components/RecenterButton";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/authContext";
-import { getRoute } from "@/lib/mapClient";
+import { errorMessage } from "@/lib/errors";
 import {
-  addLandmarkMarkers,
-  createMarkerElement,
   createPartnerMarkerElement,
-  createSelfMarkerElement,
-  setMarkerStale,
+  DRIVER_PIN_COLOR,
+  DRIVER_PIN_GLYPH,
+  MOVING_MARKER_OPTIONS,
 } from "@/lib/mapMarkers";
+import { routeLegForRide } from "@/lib/mapRoute";
 import { useTheme } from "@/lib/themeContext";
+import { tripModeFor } from "@/lib/tripMode";
+import { useMapInstance } from "@/lib/useMapInstance";
+import { useMediaQuery } from "@/lib/useMediaQuery";
+import { useRouteLine } from "@/lib/useRouteLine";
+import {
+  type SimulatedVehicle,
+  useSimulatedVehicle,
+} from "@/lib/useSimulatedVehicle";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { OperatorHeader } from "../OperatorHeader";
-import { CurrentRidePanel } from "./CurrentRidePanel";
-
-/** A position older than this is drawn greyed out. */
-const LOCATION_STALE_MS = 30_000;
+import type { TripProgress } from "./CurrentRidePanel";
+import { FinishedRideOverlays } from "./FinishedRideOverlays";
+import { OperatorPanels } from "./OperatorPanels";
+import { rideDetailPanel } from "./RideDetailSheet";
+import { rideListPanel } from "./RideQueueSheet";
+import { useDriverPosition, useSendDriverLocation } from "./useDriverPosition";
+import { useFinishedRide } from "./useFinishedRide";
+import { usePassengerMarker } from "./usePassengerMarker";
+import { useQueueEtas } from "./useQueueEtas";
+import { useQueueMarkers } from "./useQueueMarkers";
 
 /** The pin for the driver's own position. */
-const DRIVER_PIN_COLOR = "#3B82F6";
 
-/** The pin for the passenger's position. */
-const COMMUTER_PIN_COLOR = "#3B82F6";
+/**
+ * A ride is live while it has a driver and the trip has not ended.
+ */
+function rideIsLive(ride: { status: string } | null): boolean {
+  return Boolean(
+    ride && (ride.status === "accepted" || ride.status === "inProgress")
+  );
+}
+
+/**
+ * The driver is off shift with requests waiting.
+ *
+ * An approved driver is off shift until they say otherwise, and the server
+ * refuses to let them take a ride while they are. Without this the only sign
+ * of it was a failed *Accept* with a message that named a collision that had
+ * not happened.
+ */
+function isWaitingForShift(
+  online: boolean,
+  hasActiveRide: boolean,
+  waitingCount: number
+): boolean {
+  return !(online || hasActiveRide) && waitingCount > 0;
+}
+
+/**
+ * Where the road is going.
+ *
+ * While a ride is under way it is the ride's own leg: to the pickup while
+ * collecting, to the destination once the passenger is on board. With no ride
+ * yet it is the road to the request the driver is looking at — which used to
+ * be a button that sent them out to Google Maps.
+ */
+function routeTargetFor(
+  rideLegTarget: { latitude: number; longitude: number } | null,
+  selectedPickup: { latitude: number; longitude: number } | null
+): { latitude: number; longitude: number } | null {
+  if (rideLegTarget) {
+    return rideLegTarget;
+  }
+  return selectedPickup;
+}
+
+/**
+ * What the ride panel says about the road ahead.
+ *
+ * Before the trip it is the router's time to the pickup. During the trip it
+ * is the simulated vehicle's time and distance to the destination, and
+ * whether it has got there — which is what lets the driver end the ride.
+ */
+function tripPanelView(
+  isTripUnderWay: boolean,
+  trip: SimulatedVehicle,
+  routeEtaSeconds: number | null
+): { etaSeconds: number | null; progress: TripProgress | null } {
+  if (!isTripUnderWay) {
+    return { etaSeconds: routeEtaSeconds, progress: null };
+  }
+  return {
+    etaSeconds: trip.etaSeconds,
+    progress: {
+      hasArrived: trip.hasArrived,
+      remainingMeters: trip.remainingMeters,
+    },
+  };
+}
 
 export default function OperatorMapPage() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const landmarkMarkersRef = useRef<maplibregl.Marker[]>([]);
 
   const { sessionToken, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const { theme } = useTheme();
+  const isDesktop = useMediaQuery("(min-width: 768px)");
+  const rideList = rideListPanel(isDesktop);
+  const rideDetail = rideDetailPanel(isDesktop);
   const router = useRouter();
 
   const operatorProfile = useQuery(
@@ -49,7 +128,7 @@ export default function OperatorMapPage() {
     sessionToken ? { sessionToken } : "skip"
   );
   const pendingRides = useQuery(
-    api.rides.listPendingWithCommuter,
+    api.rides.listPendingForMe,
     sessionToken ? { sessionToken } : "skip"
   );
   const activeTrip = useQuery(
@@ -61,16 +140,17 @@ export default function OperatorMapPage() {
     activeTrip?.partner?.kind === "commuter" ? activeTrip.partner : null;
 
   const acceptRideMutation = useMutation(api.rides.accept);
-  const updateRideStatusMutation = useMutation(api.rides.updateStatus);
   const completeRideMutation = useMutation(api.rides.complete);
-  const updateOperatorLocationMutation = useMutation(
-    api.rides.updateOperatorLocation
-  );
+  const updateRideStatusMutation = useMutation(api.rides.updateStatus);
   const setAvailabilityMutation = useMutation(api.operators.setAvailability);
 
+  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
   const [online, setOnline] = useState(false);
   const [earnings, setEarnings] = useState(0);
   const [ridesToday, setRidesToday] = useState(0);
+
+  // fixoct48: the ride the driver has just finished, and its payment.
+  const finished = useFinishedRide(sessionToken);
 
   const partnerLocation = useQuery(
     api.rides.getPartnerLocation,
@@ -80,36 +160,120 @@ export default function OperatorMapPage() {
   );
   const commuterLocation =
     partnerLocation && "commuterLocation" in partnerLocation
-      ? partnerLocation.commuterLocation
+      ? (partnerLocation.commuterLocation ?? null)
       : null;
 
-  const commuterMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const commuterMarkerMapRef = useRef<maplibregl.Map | null>(null);
-  const routeLayerId = "route-line";
-  const locationRef = useRef<{ latitude: number; longitude: number } | null>(
-    null
-  );
-  const [_currentLocation, setCurrentLocation] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
+  // Once a demo trip starts, the vehicle is driven along the road by the
+  // server and GPS no longer moves anything on this map. A live trip keeps
+  // following GPS the whole way, and the driver's position is sent for it.
+  const { isFollowingGps: isSendingGps, isSimulating: isTripUnderWay } =
+    tripModeFor(activeRide);
+
+  const { currentLocation, locationError, locationRef } = useDriverPosition({
+    holdMarker: isTripUnderWay,
+    mapRef: map,
+    userMarkerRef,
+  });
+
+  const isRideLive = rideIsLive(activeRide);
+
+  const passengerMarkerRef = usePassengerMarker({
+    commuterLocation,
+    isRideLive,
+    isTripUnderWay,
+    mapRef: map,
+    rideEndpoints: activeRide
+      ? { dropoff: activeRide.dropoff, pickup: activeRide.pickup }
+      : null,
+  });
+
+  // The map is built first, because everything below draws on it. A hook that
+  // drew onto a map that did not exist yet would find nothing there.
+  //
+  // The map is created once and never rebuilt: the theme swaps the style on
+  // the live instance, which would otherwise throw away the WebGL context and
+  // every marker drawn on it.
+  useMapInstance({
+    containerRef: mapContainer,
+    landmarkMarkersRef,
+    mapRef: map,
+    onMapReady: (instance) => {
+      setMapInstance(instance);
+      if (!instance) {
+        userMarkerRef.current = null;
+        return;
+      }
+      const driverEl = createPartnerMarkerElement(
+        DRIVER_PIN_GLYPH,
+        DRIVER_PIN_COLOR
+      );
+      userMarkerRef.current = new maplibregl.Marker({
+        ...MOVING_MARKER_OPTIONS,
+        element: driverEl,
+      })
+        .setLngLat([122.0175, 10.7883])
+        .addTo(instance);
+    },
+    theme,
+  });
 
   type PendingRide = NonNullable<typeof pendingRides>[number];
   const [selectedRide, setSelectedRide] = useState<PendingRide | null>(null);
-  const [_driverLocation, setDriverLocation] = useState<
-    [number, number] | null
-  >(null);
-  const [showChat, setShowChat] = useState(false);
+  // Kept separately so the queue can highlight the open request without
+  // narrowing the whole selection to `null` inside the branch that renders it.
+  const selectedRideId = selectedRide?._id ?? null;
 
-  // Show chat when ride is accepted or in progress
+  // The road the driver is taking: to the pickup while collecting, to the
+  // destination once the passenger is on board.
+  const routeLeg = useMemo(() => routeLegForRide(activeRide), [activeRide]);
+
+  // With no ride yet, the road is the one to the request the driver is
+  // looking at. It used to be a button that sent them out to Google Maps,
+  // which took them off the app, away from the chat and the queue.
+  const routeTarget = routeTargetFor(
+    routeLeg.target,
+    selectedRide
+      ? {
+          latitude: selectedRide.pickup.latitude,
+          longitude: selectedRide.pickup.longitude,
+        }
+      : null
+  );
+
+  // During a demo trip the simulation draws the road, shrinking behind the
+  // vehicle, so the router is not asked for it.
+  const { route } = useRouteLine({
+    map: mapInstance,
+    origin: currentLocation,
+    phase: routeLeg.phase,
+    target: isTripUnderWay ? null : routeTarget,
+  });
+
+  // The driver and the passenger ride along in the simulated vehicle.
+  const trip = useSimulatedVehicle({
+    follow: true,
+    getMarkers: () => [userMarkerRef.current, passengerMarkerRef.current],
+    map: mapInstance,
+    rideId: isTripUnderWay && activeRide ? activeRide._id : null,
+    sessionToken,
+  });
+
+  // How long the road takes to each open request — one request for the whole
+  // queue, and only when the driver has moved far enough for it to change.
+  const queueEtas = useQueueEtas({
+    origin: currentLocation,
+    pickups: (pendingRides ?? []).map((ride) => ({
+      id: ride._id,
+      latitude: ride.pickup.latitude,
+      longitude: ride.pickup.longitude,
+    })),
+  });
+  // The chat appears on its own while a ride is live. It is deliberately not
+  // a toggle: a driver must not be able to hide the chat from a passenger who
+  // is trying to reach them.
+  const [chatReady, setChatReady] = useState(false);
+
   useEffect(() => {
-    console.log("[Operator] Chat visibility conditions:", {
-      authLoading,
-      activeRide: !!activeRide,
-      status: activeRide?.status,
-      hasSessionToken: !!sessionToken,
-    });
-
     if (
       !authLoading &&
       activeRide &&
@@ -117,12 +281,13 @@ export default function OperatorMapPage() {
         activeRide.status === "inProgress") &&
       sessionToken
     ) {
-      console.log("[Operator] Enabling chat bubble");
-      const timer = setTimeout(() => setShowChat(true), 100);
+      const timer = setTimeout(() => setChatReady(true), 100);
       return () => clearTimeout(timer);
     }
-    setShowChat(false);
+    setChatReady(false);
   }, [authLoading, activeRide, activeRide?.status, sessionToken]);
+
+  const showChat = chatReady;
 
   // Seed the online flag from the server on load
   useEffect(() => {
@@ -146,8 +311,14 @@ export default function OperatorMapPage() {
     if (!(operatorProfile && sessionToken)) {
       return;
     }
-    if (activeRide && online) {
-      showToast("Complete your current ride before going offline.", "error");
+    // A driver on a trip is on shift. The shift cannot be changed while a
+    // ride is live, because the server would then believe a driver who is
+    // carrying a passenger is available for another one.
+    if (activeRide) {
+      showToast(
+        "Finish your current ride before changing your shift.",
+        "error"
+      );
       return;
     }
 
@@ -165,256 +336,33 @@ export default function OperatorMapPage() {
             }
           : undefined,
       });
-    } catch {
+    } catch (error) {
       // Put the toggle back the way it was, so the UI never claims the
       // driver is online when the server disagrees.
       setOnline(!nextOnline);
-      showToast("Could not change your availability.", "error");
+      showToast(
+        errorMessage(error, "Could not change your availability."),
+        "error"
+      );
     }
   };
 
-  // Map init
-  useEffect(() => {
-    if (map.current || !mapContainer.current) {
-      return;
-    }
+  // The driver's position is sent while they head to the pickup, and for the
+  // whole of a live trip. Once a demo trip starts, the simulation drives the
+  // vehicle and GPS is no longer sent.
+  useSendDriverLocation({
+    locationRef,
+    ride: activeRide,
+    send: isSendingGps,
+    sessionToken,
+  });
 
-    const mapStyle =
-      theme === "dark"
-        ? "https://tiles.openfreemap.org/styles/dark"
-        : "https://tiles.openfreemap.org/styles/bright";
-    const mapInstance = new maplibregl.Map({
-      container: mapContainer.current,
-      style: mapStyle,
-      center: [122.0175, 10.7883],
-      zoom: 13,
-    });
-    map.current = mapInstance;
-
-    const driverEl = createSelfMarkerElement(DRIVER_PIN_COLOR);
-
-    userMarkerRef.current = new maplibregl.Marker({ element: driverEl })
-      .setLngLat([122.0175, 10.7883])
-      .addTo(map.current);
-
-    // The same landmarks the passenger map shows.
-    mapInstance.on("load", () => {
-      addLandmarkMarkers(mapInstance, landmarkMarkersRef.current);
-    });
-
-    let watchId: number | null = null;
-    let hasCentred = false;
-
-    if ("geolocation" in navigator) {
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          const { longitude, latitude } = position.coords;
-          const newLocation = { latitude, longitude };
-          locationRef.current = newLocation;
-          setDriverLocation([longitude, latitude]);
-          setCurrentLocation(newLocation);
-          if (userMarkerRef.current) {
-            userMarkerRef.current.setLngLat([longitude, latitude]);
-          }
-          // Centre the map on the first fix only, otherwise the camera is
-          // dragged around by every GPS sample.
-          if (!hasCentred) {
-            hasCentred = true;
-            map.current?.flyTo({ center: [longitude, latitude], zoom: 13 });
-          }
-        },
-        (error) => console.error(error),
-        { enableHighAccuracy: true }
-      );
-    }
-
-    return () => {
-      // Leaving the watcher running keeps the GPS radio on and keeps
-      // writing to a component that is no longer mounted.
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-      for (const marker of landmarkMarkersRef.current) {
-        marker.remove();
-      }
-      landmarkMarkersRef.current = [];
-      map.current?.remove();
-      map.current = null;
-    };
-  }, [theme]);
-
-  // Send operator location to Convex every 5 seconds when ride is accepted/inProgress
-  useEffect(() => {
-    if (
-      !activeRide ||
-      (activeRide.status !== "accepted" &&
-        activeRide.status !== "inProgress") ||
-      !sessionToken
-    ) {
-      return;
-    }
-
-    const sendLocation = async () => {
-      const loc = locationRef.current;
-      if (!loc) {
-        return;
-      }
-
-      try {
-        await updateOperatorLocationMutation({
-          sessionToken,
-          rideId: activeRide._id,
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-        });
-      } catch (error) {
-        console.error("Failed to update operator location:", error);
-      }
-    };
-
-    sendLocation();
-    const interval = setInterval(sendLocation, 5000);
-
-    return () => clearInterval(interval);
-  }, [activeRide, sessionToken, updateOperatorLocationMutation]);
-
-  // Display commuter marker and route when location is available
-  useEffect(() => {
-    const loc = locationRef.current;
-    if (!(map.current && commuterLocation && loc)) {
-      return;
-    }
-
-    // The map is rebuilt when the theme changes, which takes the old marker
-    // with it. A marker that belongs to a previous map has to be recreated.
-    if (commuterMarkerMapRef.current !== map.current) {
-      commuterMarkerRef.current?.remove();
-      commuterMarkerRef.current = null;
-      commuterMarkerMapRef.current = map.current;
-    }
-
-    // Remove existing route if any
-    if (map.current.getLayer(routeLayerId)) {
-      map.current.removeLayer(routeLayerId);
-    }
-    if (map.current.getSource("route")) {
-      map.current.removeSource("route");
-    }
-
-    // Add or update commuter marker
-    if (commuterMarkerRef.current) {
-      commuterMarkerRef.current.setLngLat([
-        commuterLocation.longitude,
-        commuterLocation.latitude,
-      ]);
-    } else {
-      commuterMarkerRef.current = new maplibregl.Marker({
-        element: createPartnerMarkerElement("👤", COMMUTER_PIN_COLOR),
-      })
-        .setLngLat([commuterLocation.longitude, commuterLocation.latitude])
-        .addTo(map.current);
-    }
-
-    // Check if location is stale (30 seconds)
-    setMarkerStale(
-      commuterMarkerRef.current.getElement(),
-      Date.now() - commuterLocation.updatedAt > LOCATION_STALE_MS,
-      COMMUTER_PIN_COLOR
-    );
-
-    // Draw route from operator to commuter
-    const drawRoute = async () => {
-      const route = await getRoute(
-        [loc.longitude, loc.latitude],
-        [commuterLocation.longitude, commuterLocation.latitude]
-      );
-
-      if (route && map.current) {
-        map.current.addSource("route", {
-          type: "geojson",
-          data: {
-            type: "Feature",
-            properties: {},
-            geometry: route,
-          },
-        });
-
-        map.current.addLayer({
-          id: routeLayerId,
-          type: "line",
-          source: "route",
-          layout: {
-            "line-join": "round",
-            "line-cap": "round",
-          },
-          paint: {
-            "line-color": "#3b82f6",
-            "line-width": 4,
-            "line-opacity": 0.7,
-          },
-        });
-      }
-    };
-
-    drawRoute();
-  }, [commuterLocation]);
-
-  // Clear markers when ride ends
-  useEffect(() => {
-    if (
-      !activeRide ||
-      (activeRide.status !== "accepted" && activeRide.status !== "inProgress")
-    ) {
-      if (commuterMarkerRef.current) {
-        commuterMarkerRef.current.remove();
-        commuterMarkerRef.current = null;
-      }
-      if (map.current?.getLayer(routeLayerId)) {
-        map.current.removeLayer(routeLayerId);
-      }
-      if (map.current?.getSource("route")) {
-        map.current.removeSource("route");
-      }
-    }
-  }, [activeRide]);
-
-  const addCommuterMarkers = useCallback(
-    (rides: NonNullable<typeof pendingRides>) => {
-      const mapInstance = map.current;
-      if (!mapInstance) {
-        return;
-      }
-
-      for (const marker of markersRef.current.values()) {
-        marker.remove();
-      }
-      markersRef.current.clear();
-
-      for (const ride of rides) {
-        const pickupEl = createMarkerElement("#10B981", "📍");
-        const pickupMarker = new maplibregl.Marker({ element: pickupEl })
-          .setLngLat([ride.pickup.longitude, ride.pickup.latitude])
-          .addTo(mapInstance);
-        pickupEl.addEventListener("click", () => setSelectedRide(ride));
-        markersRef.current.set(`pickup-${ride._id}`, pickupMarker);
-
-        const dropoffEl = createMarkerElement("#EF4444", "📌");
-        const dropoffMarker = new maplibregl.Marker({ element: dropoffEl })
-          .setLngLat([ride.dropoff.longitude, ride.dropoff.latitude])
-          .addTo(mapInstance);
-        dropoffEl.addEventListener("click", () => setSelectedRide(ride));
-        markersRef.current.set(`dropoff-${ride._id}`, dropoffMarker);
-      }
-    },
-    []
-  );
-
-  // Update markers when pending rides change
-  useEffect(() => {
-    if (map.current && pendingRides) {
-      addCommuterMarkers(pendingRides);
-    }
-  }, [pendingRides, addCommuterMarkers]);
+  // The pins for the requests waiting in the queue.
+  useQueueMarkers({
+    mapRef: map,
+    onSelect: setSelectedRide,
+    rides: pendingRides,
+  });
 
   const handleAcceptRide = async (rideId: Id<"rides">) => {
     if (!(operatorProfile && sessionToken)) {
@@ -427,31 +375,61 @@ export default function OperatorMapPage() {
         operatorId: operatorProfile._id,
       });
       setSelectedRide(null);
-    } catch {
-      showToast("This ride was already accepted by another driver.", "error");
+    } catch (error) {
+      // The server says exactly why the ride could not be taken — the driver
+      // is off shift, they are already on a trip, or somebody else got there
+      // first. Reporting all of those as "already accepted by another driver"
+      // sent the driver looking for a collision that did not exist.
+      showToast(errorMessage(error, "Could not accept this ride."), "error");
     }
   };
 
-  const handlePickedUp = async () => {
+  /**
+   * Starts the trip — only once the passenger has confirmed the pickup.
+   *
+   * fixoct45: the button that calls this used to look disabled but was not,
+   * so a driver could start a ride the passenger had never confirmed. The
+   * guard here and the one in `rides.updateStatus` keep it that way even if
+   * the button is somehow pressed. A passenger who never shows is handled by
+   * cancelling the ride, not by starting it without them.
+   */
+  const handleStartTrip = async () => {
     if (!(activeRide && sessionToken)) {
       return;
     }
-    await updateRideStatusMutation({
-      sessionToken,
-      id: activeRide._id,
-      status: "inProgress",
-    });
+    if (activeRide.confirmedAt === undefined) {
+      showToast("Waiting for the passenger to confirm the pickup.", "info");
+      return;
+    }
+    try {
+      await updateRideStatusMutation({
+        sessionToken,
+        id: activeRide._id,
+        status: "inProgress",
+      });
+    } catch (error) {
+      showToast(errorMessage(error, "Could not start the ride."), "error");
+    }
   };
 
   const handleCompleteRide = async () => {
     if (!(activeRide && operatorProfile && sessionToken)) {
       return;
     }
-    await completeRideMutation({
-      sessionToken,
-      id: activeRide._id,
-      operatorId: operatorProfile._id,
-    });
+    try {
+      await completeRideMutation({
+        sessionToken,
+        id: activeRide._id,
+        operatorId: operatorProfile._id,
+        // A cash ride is settled by the driver confirming the handover, and
+        // the server will not close it without that confirmation.
+        ...(activeRide.paymentMethod === "cash" ? { cashCollected: true } : {}),
+      });
+    } catch (error) {
+      showToast(errorMessage(error, "Could not complete the ride."), "error");
+      return;
+    }
+    finished.track(activeRide._id);
     setEarnings((previous) => previous + (activeRide.fare ?? 0));
     setRidesToday((previous) => previous + 1);
   };
@@ -460,37 +438,44 @@ export default function OperatorMapPage() {
     window.location.href = `tel:${phone}`;
   };
 
-  const handleNavigate = (lat: number, lng: number) => {
-    window.open(
-      `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
-      "_blank"
-    );
-  };
+  const tripView = tripPanelView(
+    isTripUnderWay,
+    trip,
+    route?.durationSeconds ?? null
+  );
+
+  const waitingForShift = isWaitingForShift(
+    online,
+    Boolean(activeRide),
+    pendingRides?.length ?? 0
+  );
 
   return (
     <div className="relative h-screen w-full bg-slate-950">
       {/* Map */}
-      {/* `relative z-0` makes this a stacking context, so the map's markers
+      {/* `relative z-0` makes it a stacking context, so the map's markers
           stay inside the map instead of painting over the overlays. */}
       <div className="relative z-0 h-full w-full" ref={mapContainer} />
+
+      <RecenterButton
+        className="absolute top-28 left-1/2 z-20 -translate-x-1/2"
+        trip={trip}
+      />
+
+      {/* The menu button floats above the map, clear of the header. */}
+      <AppMenuButton className="fixed top-3 left-3 z-[55]" />
 
       {/* Header */}
       <div className="absolute top-0 right-0 left-0 z-10">
         <OperatorHeader
+          locationError={locationError}
           online={online}
           onToggleOnline={handleToggleOnline}
           profile={operatorProfile}
           theme={theme}
+          waitingCount={pendingRides?.length ?? 0}
+          waitingForShift={waitingForShift}
         />
-        <div className="flex justify-end px-2 pb-2 md:px-4">
-          <button
-            className="rounded-lg bg-sky-600 px-2 py-1 text-[10px] text-white md:px-3 md:py-1 md:text-xs"
-            onClick={() => setShowChat((prev) => !prev)}
-            type="button"
-          >
-            Chat {showChat ? "ON" : "OFF"}
-          </button>
-        </div>
       </div>
 
       {/* Earnings & Stats — Desktop only */}
@@ -506,220 +491,37 @@ export default function OperatorMapPage() {
         </div>
       </div>
 
-      {/* Ride List Panel — bottom sheet on mobile, sidebar on desktop */}
-      {!activeRide && (
-        <div className="absolute right-0 bottom-16 left-0 z-20 touch-pan-y overflow-y-auto overscroll-contain border-[var(--border)] border-t bg-[var(--surface)] md:top-16 md:right-auto md:bottom-0 md:left-0 md:w-80 md:rounded-none md:border-t-0 md:border-r lg:top-20">
-          {/* Mobile drag handle */}
-          <div className="flex justify-center py-2 md:hidden">
-            <div className="h-1.5 w-12 rounded-full bg-[var(--surface-muted)]" />
-          </div>
+      <OperatorPanels
+        activeEtaSeconds={tripView.etaSeconds}
+        activeRide={activeRide}
+        canAccept={Boolean(operatorProfile)}
+        chatReady={showChat}
+        detailClassName={rideDetail.className}
+        detailRide={selectedRide}
+        detailVariant={rideDetail.variant}
+        etas={queueEtas}
+        onAccept={handleAcceptRide}
+        onCall={handleCall}
+        onCloseDetail={() => setSelectedRide(null)}
+        onComplete={handleCompleteRide}
+        onSelectRequest={setSelectedRide}
+        onStartTrip={handleStartTrip}
+        partner={activeRideCommuter}
+        pendingRides={pendingRides}
+        queueClassName={rideList.className}
+        queueHidden={finished.panelOpen}
+        queueVariant={rideList.variant}
+        selectedRideId={selectedRideId}
+        sessionToken={sessionToken}
+        tripProgress={tripView.progress}
+      />
 
-          <div className="border-[var(--border)] border-b p-3 md:p-4 md:p-6">
-            <h2 className="font-bold text-[var(--foreground)] text-lg md:text-xl lg:text-2xl">
-              Available
-            </h2>
-            <p className="mt-0.5 text-[var(--text-muted)] text-xs md:mt-1 md:text-sm">
-              {pendingRides === undefined
-                ? "Loading..."
-                : `${pendingRides.length} waiting`}
-            </p>
-          </div>
-
-          <div className="space-y-2 p-2 md:space-y-3 md:p-3 md:p-4">
-            {pendingRides?.length === 0 && (
-              <p className="py-4 text-center text-[var(--text-muted)] text-xs md:py-8 md:text-sm">
-                No rides available
-              </p>
-            )}
-            {pendingRides?.map((ride) => (
-              <button
-                className={`w-full rounded-xl border p-3 text-left transition md:rounded-2xl md:p-4 ${
-                  selectedRide?._id === ride._id
-                    ? "border-sky-500 bg-sky-500/10"
-                    : "border-[var(--border)] bg-[var(--surface-strong)]/50 hover:bg-[var(--surface-strong)]"
-                }`}
-                key={ride._id}
-                onClick={() => setSelectedRide(ride)}
-                type="button"
-              >
-                <div className="mb-1 flex items-start justify-between md:mb-2">
-                  <div>
-                    <p className="font-semibold text-[var(--foreground)] text-sm md:text-base">
-                      {ride.commuter?.name ?? "Unknown"}
-                    </p>
-                    <span className="mt-0.5 inline-block rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] capitalize md:mt-1 md:px-2 md:text-xs">
-                      {ride.vehicleType ?? "standard"}
-                    </span>
-                  </div>
-                  <span className="font-bold text-base text-sky-400 md:text-lg">
-                    ₱{ride.fare}
-                  </span>
-                </div>
-
-                <div className="space-y-1 text-[var(--foreground)] text-xs md:space-y-1.5 md:text-sm">
-                  <div className="flex items-center gap-1.5 md:gap-2">
-                    <span className="text-green-500 text-sm md:text-base">
-                      📍
-                    </span>
-                    <span className="truncate">{ride.pickup.address}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 md:gap-2">
-                    <span className="text-red-500 text-sm md:text-base">
-                      📌
-                    </span>
-                    <span className="truncate">{ride.dropoff.address}</span>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Ride Detail Panel — bottom sheet on mobile, right sidebar on md+ */}
-      {selectedRide && !activeRide && (
-        <div className="absolute right-0 bottom-0 left-0 z-30 max-h-[70dvh] touch-pan-y overflow-y-auto overscroll-contain rounded-t-3xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl md:max-h-none md:rounded-none md:border-t-0 md:border-l lg:top-0 lg:right-0 lg:bottom-auto lg:left-auto lg:w-96">
-          {/* Drag handle — mobile only */}
-          <div className="flex justify-center py-2 md:hidden">
-            <div className="h-1.5 w-12 rounded-full bg-[var(--surface-muted)]" />
-          </div>
-
-          <div className="border-[var(--border)] border-b p-3 md:p-4 md:p-6">
-            <h3 className="font-bold text-[var(--foreground)] text-lg md:text-xl">
-              Ride Details
-            </h3>
-          </div>
-
-          <div className="space-y-3 p-3 md:space-y-4 md:p-4 md:p-6">
-            {/* Passenger */}
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-strong)]/50 p-3 md:rounded-2xl md:p-4">
-              <p className="mb-1 text-[10px] text-[var(--text-muted)] uppercase tracking-widest md:mb-2 md:text-xs">
-                Passenger
-              </p>
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-[var(--foreground)] text-sm md:text-base">
-                  {selectedRide.commuter?.name ?? "Unknown"}
-                </p>
-                {selectedRide.commuter?.phone && (
-                  <button
-                    className="flex items-center gap-1.5 rounded-lg bg-sky-600 px-2.5 py-1.5 text-white text-xs transition hover:bg-sky-500 md:gap-2 md:px-3 md:py-2 md:text-sm"
-                    onClick={() =>
-                      selectedRide.commuter?.phone &&
-                      handleCall(selectedRide.commuter.phone)
-                    }
-                    type="button"
-                  >
-                    <FaPhone className="text-[10px] md:text-sm" />
-                    <span className="hidden md:inline">Call</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Locations */}
-            <div className="space-y-2 md:space-y-3">
-              <div className="rounded-xl border border-[var(--border)] border-l-3 border-l-green-500 bg-[var(--surface-strong)]/50 p-3 md:rounded-2xl md:p-4">
-                <p className="mb-1 text-[10px] text-[var(--text-muted)] uppercase tracking-widest md:mb-1 md:text-xs">
-                  Pickup
-                </p>
-                <p className="line-clamp-2 font-semibold text-[var(--foreground)] text-xs md:text-sm">
-                  {selectedRide.pickup.address}
-                </p>
-                <p className="mt-0.5 text-[10px] text-[var(--text-muted)] md:mt-1 md:text-xs">
-                  {selectedRide.pickup.latitude.toFixed(4)},{" "}
-                  {selectedRide.pickup.longitude.toFixed(4)}
-                </p>
-              </div>
-              <div className="rounded-xl border border-[var(--border)] border-l-3 border-l-red-500 bg-[var(--surface-strong)]/50 p-3 md:rounded-2xl md:p-4">
-                <p className="mb-1 text-[10px] text-[var(--text-muted)] uppercase tracking-widest md:mb-1 md:text-xs">
-                  Dropoff
-                </p>
-                <p className="line-clamp-2 font-semibold text-[var(--foreground)] text-xs md:text-sm">
-                  {selectedRide.dropoff.address}
-                </p>
-                <p className="mt-0.5 text-[10px] text-[var(--text-muted)] md:mt-1 md:text-xs">
-                  {selectedRide.dropoff.latitude.toFixed(4)},{" "}
-                  {selectedRide.dropoff.longitude.toFixed(4)}
-                </p>
-              </div>
-            </div>
-
-            {/* Vehicle & Fare */}
-            <div className="grid grid-cols-2 gap-2 md:gap-3">
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-strong)]/50 p-2.5 text-center md:rounded-2xl md:p-3">
-                <p className="mb-0.5 text-[10px] text-[var(--text-muted)] md:mb-1 md:text-xs">
-                  Vehicle
-                </p>
-                <p className="font-semibold text-[var(--foreground)] text-xs capitalize md:text-sm">
-                  {selectedRide.vehicleType ?? "standard"}
-                </p>
-              </div>
-              <div className="rounded-xl border border-sky-500 bg-sky-500/10 p-2.5 text-center md:rounded-2xl md:p-3">
-                <p className="mb-0.5 text-[10px] text-[var(--text-muted)] md:mb-1 md:text-xs">
-                  Fare
-                </p>
-                <p className="font-bold text-base text-sky-400 md:text-xl">
-                  ₱{selectedRide.fare}
-                </p>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="space-y-2 md:space-y-3">
-              <button
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-green-600 px-3 py-2.5 font-semibold text-sm text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)] md:gap-2 md:rounded-2xl md:px-4 md:py-3 md:text-base"
-                disabled={!operatorProfile}
-                onClick={() => handleAcceptRide(selectedRide._id)}
-                type="button"
-              >
-                <FaCheckCircle className="text-sm md:text-base" />
-                Accept
-              </button>
-              <button
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 py-2 font-semibold text-[var(--foreground)] text-xs transition hover:bg-[var(--surface-muted)] md:rounded-2xl md:px-4 md:py-2.5 md:text-sm"
-                onClick={() =>
-                  handleNavigate(
-                    selectedRide.pickup.latitude,
-                    selectedRide.pickup.longitude
-                  )
-                }
-                type="button"
-              >
-                <FaMapMarkerAlt className="mr-1.5 inline text-xs md:mr-2 md:text-sm" />
-                Navigate
-              </button>
-              <button
-                className="w-full rounded-xl border border-[var(--border)] py-1.5 text-[var(--text-muted)] text-xs transition hover:text-[var(--foreground)] md:rounded-2xl md:py-2 md:text-sm"
-                onClick={() => setSelectedRide(null)}
-                type="button"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Current Active Ride Panel — bottom bar */}
-      {activeRide && (
-        <CurrentRidePanel
-          onCall={handleCall}
-          onComplete={handleCompleteRide}
-          onPickedUp={handlePickedUp}
-          partner={activeRideCommuter}
-          ride={activeRide}
-        />
-      )}
-
-      {showChat && activeRide && sessionToken && (
-        <ChatBubble
-          partnerName={activeRideCommuter?.name ?? "Passenger"}
-          partnerRole="commuter"
-          positionOverride="bottom-40 right-4 md:bottom-32"
-          rideId={activeRide._id}
-          sessionToken={sessionToken}
-        />
-      )}
+      {/* fixoct48: the finished ride and its payment, as the passenger sees
+          theirs. A new ride takes the screen back. */}
+      <FinishedRideOverlays
+        finished={finished}
+        hasActiveRide={Boolean(activeRide)}
+      />
     </div>
   );
 }

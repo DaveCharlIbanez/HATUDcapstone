@@ -47,6 +47,10 @@ test("the dashboard counts the fleet and lists the records behind it", async () 
   });
   await seedRide(t, commuter.commuterId, { status: "completed" });
   await seedRide(t, commuter.commuterId, { status: "cancelled" });
+  // A driver counts as active only with the app open (fixoct51).
+  await t.mutation(api.presence.heartbeat, {
+    sessionToken: operator.sessionToken,
+  });
 
   const dashboard = await t.query(api.adminQueries.getDashboard, {
     sessionToken: admin.sessionToken,

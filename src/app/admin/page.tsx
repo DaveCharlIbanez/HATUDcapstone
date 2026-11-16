@@ -7,20 +7,21 @@ import {
   FaClipboardList,
   FaExclamationTriangle,
   FaMapMarkerAlt,
+  FaSignal,
   FaStar,
-  FaUserCheck,
   FaUsers,
   FaWallet,
 } from "react-icons/fa";
+import { AppLoader } from "@/components/AppLoader";
 import {
   ApprovalsPanel,
   CancellationsPanel,
   CompletedRidesPanel,
-  DriversPanel,
   FeedbackPanel,
   LiveRidesPanel,
   RevenuePanel,
   RidersPanel,
+  UsersPanel,
 } from "@/components/admin/AdminPanels";
 import { PanelSkeleton } from "@/components/admin/DetailRow";
 import { DocumentViewer } from "@/components/admin/DocumentViewer";
@@ -31,17 +32,48 @@ import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/authContext";
 import { formatPeso } from "@/lib/format";
 import { api } from "../../../convex/_generated/api";
-import type { AdminDriverRow } from "../../../convex/adminQueries";
+import type {
+  AdminDashboard,
+  AdminDriverRow,
+} from "../../../convex/adminQueries";
 
 type PanelId =
+  | "activeUsers"
   | "approvals"
   | "cancellations"
   | "completed"
-  | "drivers"
   | "feedback"
   | "liveRides"
   | "revenue"
   | "riders";
+
+type Metrics = AdminDashboard["metrics"];
+
+/** The headline figure on each card, or a dash while the data loads. */
+function metricValues(metrics: Metrics | undefined): Record<PanelId, string> {
+  if (!metrics) {
+    return {
+      activeUsers: "—",
+      approvals: "—",
+      cancellations: "—",
+      completed: "—",
+      feedback: "—",
+      liveRides: "—",
+      revenue: "—",
+      riders: "—",
+    };
+  }
+  return {
+    activeUsers: `${metrics.activeUsers} / ${metrics.totalUsers}`,
+    approvals: String(metrics.pendingDrivers),
+    cancellations: String(metrics.cancelledTrips),
+    completed: String(metrics.completedTrips),
+    feedback: String(metrics.ratingCount),
+    liveRides: String(metrics.liveTrips),
+    revenue: formatPeso(metrics.revenue),
+    riders: String(metrics.riders),
+  };
+}
 
 export default function AdminPage() {
   const { isLoading: authLoading, sessionToken, user } = useAuth();
@@ -95,26 +127,16 @@ export default function AdminPage() {
   };
 
   if (authLoading || !user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--background)] text-[var(--foreground)]">
-        <p className="text-[var(--text-muted)]">Loading...</p>
-      </div>
-    );
+    return <AppLoader variant="full" />;
   }
 
   const metrics = dashboard?.metrics;
   const panels = dashboard;
 
-  const value = {
-    approvals: metrics ? String(metrics.pendingDrivers) : "—",
-    cancellations: metrics ? String(metrics.cancelledTrips) : "—",
-    completed: metrics ? String(metrics.completedTrips) : "—",
-    drivers: metrics ? String(metrics.activeDrivers) : "—",
-    feedback: metrics ? String(metrics.ratingCount) : "—",
-    liveRides: metrics ? String(metrics.liveTrips) : "—",
-    revenue: metrics ? formatPeso(metrics.revenue) : "—",
-    riders: metrics ? String(metrics.riders) : "—",
-  };
+  const value = metricValues(metrics);
+  const activeUsersHint = metrics
+    ? `${metrics.activeDrivers} ${metrics.activeDrivers === 1 ? "driver" : "drivers"} on shift · tap to filter`
+    : "Commuters and operators with the app open";
 
   const body = (content: React.ReactNode) =>
     panels ? content : <PanelSkeleton />;
@@ -152,14 +174,18 @@ export default function AdminPage() {
 
         <div className="mt-4 space-y-3">
           <MetricDisclosure
-            hint="Drivers who are online right now"
-            icon={FaUserCheck}
-            isOpen={openPanel === "drivers"}
-            label="Active Drivers"
-            onToggle={() => togglePanel("drivers")}
-            value={value.drivers}
+            hint={activeUsersHint}
+            icon={FaSignal}
+            isOpen={openPanel === "activeUsers"}
+            label="Active Users"
+            onToggle={() => togglePanel("activeUsers")}
+            value={value.activeUsers}
           >
-            {body(<DriversPanel drivers={panels?.drivers ?? []} />)}
+            {body(
+              <UsersPanel
+                roster={panels?.userRoster ?? { commuters: [], operators: [] }}
+              />
+            )}
           </MetricDisclosure>
 
           <MetricDisclosure
@@ -217,7 +243,7 @@ export default function AdminPage() {
           </MetricDisclosure>
 
           <MetricDisclosure
-            hint="Settled GCash payments"
+            hint="Settled payments"
             icon={FaWallet}
             isOpen={openPanel === "revenue"}
             label="Revenue"
@@ -251,7 +277,7 @@ export default function AdminPage() {
                 cancellations={
                   panels?.cancellations ?? {
                     averageWaitMs: null,
-                    byVehicleType: [],
+                    byVehicleType: [{ cancelled: 0, completed: 0 }],
                     cancelled: 0,
                     completed: 0,
                     rate: 0,

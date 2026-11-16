@@ -39,11 +39,32 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- The rider shares their position with the driver, and the driver's
+         position is drawn on the rider's map.
+
+         Capacitor's bridge asks for these at runtime when the WebView first
+         asks for a location — see BridgeWebChromeClient's
+         onGeolocationPermissionsShowPrompt — but a permission that is not
+         declared here can never be granted. The request is dropped without a
+         dialog and the WebView denies geolocation, which is why the app on a
+         phone never asked for location at all. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <!-- The driver credential upload opens the camera. Capacitor requests this
          at runtime when a file input asks to capture, and the request is
          denied silently if the permission is not declared here. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature
         android:name="android.hardware.camera"
+        android:required="false" />
+
+    <!-- Location is optional: the app still installs on a device with no GPS,
+         it just cannot share a position. -->
+    <uses-feature
+        android:name="android.hardware.location"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.location.gps"
         android:required="false" />
 </manifest>

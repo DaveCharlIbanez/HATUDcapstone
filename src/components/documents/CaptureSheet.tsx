@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { FaCamera, FaFolderOpen, FaTrash } from "react-icons/fa";
+import { DragSheet, type SnapPoint } from "@/components/DragSheet";
 
 export type CaptureSource = "camera" | "file";
 
@@ -14,6 +15,14 @@ interface CaptureSheetProps {
   onRemove: () => void;
   title: string;
 }
+
+/** Detents of the capture sheet. There is no collapsed state: a capture
+    sheet showing only its handle would be useless. */
+const CAPTURE_SNAPS: SnapPoint[] = [
+  { id: "half", ratio: 0.75 },
+  { id: "full", ratio: 1 },
+  { id: "expanded", ratio: 1.4 },
+];
 /**
  * The bottom sheet a driver picks a document from.
  *
@@ -83,95 +92,103 @@ export function CaptureSheet({
       <div
         aria-label={title}
         aria-modal="true"
-        className="relative w-full max-w-md rounded-t-3xl border-[var(--border)] border-t bg-[var(--surface)] p-5 pb-8 shadow-2xl"
+        className="relative w-full max-w-md"
         role="dialog"
       >
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-[var(--surface-muted)]" />
+        <DragSheet
+          bodyClassName="px-5 pb-8"
+          className="w-full rounded-t-3xl bg-[var(--surface)]"
+          defaultSnapId="full"
+          dismissLabel={title}
+          handleLabel={title}
+          onDismiss={onClose}
+          snaps={CAPTURE_SNAPS}
+        >
+          <p className="text-center font-semibold text-[var(--foreground)]">
+            {title}
+          </p>
 
-        <p className="text-center font-semibold text-[var(--foreground)]">
-          {title}
-        </p>
-
-        <div className="mt-5 space-y-3">
-          <button
-            className="flex min-h-14 w-full items-center gap-4 rounded-2xl bg-[var(--surface-strong)] px-5 text-left transition hover:bg-[var(--surface-muted)]"
-            onClick={() => cameraInputRef.current?.click()}
-            type="button"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-600 dark:text-sky-400">
-              <FaCamera className="text-lg" />
-            </span>
-            <span>
-              <span className="block font-semibold text-[var(--foreground)] text-sm">
-                Take a photo
-              </span>
-              <span className="block text-[var(--text-muted)] text-sm">
-                Use the camera now
-              </span>
-            </span>
-          </button>
-
-          <button
-            className="flex min-h-14 w-full items-center gap-4 rounded-2xl bg-[var(--surface-strong)] px-5 text-left transition hover:bg-[var(--surface-muted)]"
-            onClick={() => fileInputRef.current?.click()}
-            type="button"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-              <FaFolderOpen className="text-lg" />
-            </span>
-            <span>
-              <span className="block font-semibold text-[var(--foreground)] text-sm">
-                Select file
-              </span>
-              <span className="block text-[var(--text-muted)] text-sm">
-                From your gallery or files
-              </span>
-            </span>
-          </button>
-
-          {canRemove ? (
+          <div className="mt-5 space-y-3">
             <button
-              className="flex min-h-14 w-full items-center gap-4 rounded-2xl px-5 text-left text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-400"
-              onClick={onRemove}
+              className="flex min-h-14 w-full items-center gap-4 rounded-2xl bg-[var(--surface-strong)] px-5 text-left transition hover:bg-[var(--surface-muted)]"
+              onClick={() => cameraInputRef.current?.click()}
               type="button"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-500/15">
-                <FaTrash className="text-lg" />
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-600 dark:text-sky-400">
+                <FaCamera className="text-lg" />
               </span>
-              <span className="font-semibold text-sm">Remove document</span>
+              <span>
+                <span className="block font-semibold text-[var(--foreground)] text-sm">
+                  Take a photo
+                </span>
+                <span className="block text-[var(--text-muted)] text-sm">
+                  Use the camera now
+                </span>
+              </span>
             </button>
-          ) : null}
 
-          <button
-            className="min-h-14 w-full rounded-2xl bg-[var(--surface-muted)] font-semibold text-[var(--foreground)] text-sm transition hover:bg-[var(--surface-strong)]"
-            onClick={onClose}
-            type="button"
-          >
-            Cancel
-          </button>
-        </div>
+            <button
+              className="flex min-h-14 w-full items-center gap-4 rounded-2xl bg-[var(--surface-strong)] px-5 text-left transition hover:bg-[var(--surface-muted)]"
+              onClick={() => fileInputRef.current?.click()}
+              type="button"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <FaFolderOpen className="text-lg" />
+              </span>
+              <span>
+                <span className="block font-semibold text-[var(--foreground)] text-sm">
+                  Select file
+                </span>
+                <span className="block text-[var(--text-muted)] text-sm">
+                  From your gallery or files
+                </span>
+              </span>
+            </button>
 
-        {/*
+            {canRemove ? (
+              <button
+                className="flex min-h-14 w-full items-center gap-4 rounded-2xl px-5 text-left text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-400"
+                onClick={onRemove}
+                type="button"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-500/15">
+                  <FaTrash className="text-lg" />
+                </span>
+                <span className="font-semibold text-sm">Remove document</span>
+              </button>
+            ) : null}
+
+            <button
+              className="min-h-14 w-full rounded-2xl bg-[var(--surface-muted)] font-semibold text-[var(--foreground)] text-sm transition hover:bg-[var(--surface-strong)]"
+              onClick={onClose}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+
+          {/*
           The camera input needs `image/*` for Capacitor to route it to the
           camera at all — with a narrower accept attribute the bridge ignores
           `capture` and opens the file picker instead. The file input uses the
           narrow attribute so the system picker only offers PNG and JPG.
         */}
-        <input
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={handleChange}
-          ref={cameraInputRef}
-          type="file"
-        />
-        <input
-          accept="image/png,image/jpeg"
-          className="hidden"
-          onChange={handleFileChange}
-          ref={fileInputRef}
-          type="file"
-        />
+          <input
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleChange}
+            ref={cameraInputRef}
+            type="file"
+          />
+          <input
+            accept="image/png,image/jpeg"
+            className="hidden"
+            onChange={handleFileChange}
+            ref={fileInputRef}
+            type="file"
+          />
+        </DragSheet>
       </div>
     </div>
   );

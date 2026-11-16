@@ -1,8 +1,29 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import { action, mutation, query } from "./_generated/server";
+import { emailProvider, otpEmailMessage } from "./lib/email";
+import {
+  generateOtpCode,
+  hashOtp,
+  MAX_OTP_ATTEMPTS,
+  matchesOtp,
+  newOtpSalt,
+  OTP_TTL_MS,
+  RESEND_COOLDOWN_MS,
+} from "./lib/otp";
 import { hashPassword, verifyPassword } from "./lib/password";
+import { createAccountFromSignup } from "./lib/signupAccount";
+import {
+  isGmailAddress,
+  isValidPhone,
+  normaliseEmail,
+  normalisePhone,
+} from "./lib/signupRules";
+import { requireAuth } from "./lib/withAuth";
+import { clearPresence } from "./presence";
+import { sandboxEnabled } from "./signupCodes";
 
 // MutationCtx used by rate-limiting helpers
 
@@ -18,6 +39,21 @@ const UPPERCASE_LETTER = /[A-Z]/;
 const DIGIT = /[0-9]/;
 
 // ─── Session helpers ──────────────────────────────────────────────────────────
+
+/**
+ * The password rules, checked on the server.
+ */
+function validatePassword(password: string): void {
+  if (password.length < 8) {
+    throw new Error("Password must be at least 8 characters");
+  }
+  if (!UPPERCASE_LETTER.test(password)) {
+    throw new Error("Password must contain at least one uppercase letter");
+  }
+  if (!DIGIT.test(password)) {
+    throw new Error("Password must contain at least one number");
+  }
+}
 
 function resolveLockDuration(failureCount: number): number | undefined {
   if (failureCount >= MAX_FAILED_ATTEMPTS) {
@@ -121,7 +157,17 @@ async function clearLoginAttempts(ctx: MutationCtx, email: string) {
 
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
-export const signup = mutation({
+/**
+ * Asks for a sign-up code, and sends it to the address.
+ *
+ * This is the first half of signing up. It checks the rules, checks that the
+ * address and the number are free, stores the pending sign-up with a hashed
+ * code, and sends the code. No account exists yet.
+ *
+ * It is an action because it sends an email, and a Convex action is the only
+ * kind of function that can make a network call.
+ */
+export const requestSignupCode = action({
   args: {
     name: v.string(),
     email: v.string(),
@@ -138,88 +184,238 @@ export const signup = mutation({
       })
     ),
   },
-  handler: async (ctx, args) => {
-    // Server-side password strength validation
-    if (args.password.length < 8) {
-      throw new Error("Password must be at least 8 characters");
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
+    email: string;
+    expiresInSeconds: number;
+    resendInSeconds: number;
+  }> => {
+    const email = normaliseEmail(args.email);
+
+    if (!isGmailAddress(email)) {
+      throw new Error("Use a Gmail address, for example you@gmail.com.");
     }
-    if (!UPPERCASE_LETTER.test(args.password)) {
-      throw new Error("Password must contain at least one uppercase letter");
+    if (!isValidPhone(args.phone)) {
+      throw new Error(
+        "Enter your 11-digit mobile number, for example 09171234567."
+      );
     }
-    if (!DIGIT.test(args.password)) {
-      throw new Error("Password must contain at least one number");
+    validatePassword(args.password);
+
+    if (args.role === "operator" && !(args.licenseNumber && args.vehicleInfo)) {
+      throw new Error("Operator requires license number and vehicle info");
     }
 
-    const existingEmail = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email))
-      .first();
-    if (existingEmail) {
+    const phone = normalisePhone(args.phone);
+
+    const takenEmail = await ctx.runQuery(internal.signupCodes.emailTaken, {
+      email,
+    });
+    if (takenEmail) {
       throw new Error("Email already registered");
     }
-
-    const existingPhone = await ctx.db
-      .query("users")
-      .withIndex("by_phone", (q) => q.eq("phone", args.phone))
-      .first();
-    if (existingPhone) {
+    const takenPhone = await ctx.runQuery(internal.signupCodes.phoneTaken, {
+      phone,
+    });
+    if (takenPhone) {
       throw new Error("Phone number already registered");
     }
 
-    const passwordHash = await hashPassword(args.password);
-    const now = Date.now();
-
-    const userId = await ctx.db.insert("users", {
-      email: args.email,
-      passwordHash,
-      phone: args.phone,
-      role: args.role,
-      createdAt: now,
-      updatedAt: now,
+    const waitMs = await ctx.runQuery(internal.signupCodes.resendWaitMs, {
+      email,
     });
-
-    if (args.role === "commuter") {
-      await ctx.db.insert("commuters", {
-        userId,
-        name: args.name,
-        email: args.email,
-        phone: args.phone,
-        savedLocations: [],
-        createdAt: now,
-        updatedAt: now,
-      });
-    } else if (args.role === "operator") {
-      if (!(args.licenseNumber && args.vehicleInfo)) {
-        throw new Error("Operator requires license number and vehicle info");
-      }
-      await ctx.db.insert("operators", {
-        userId,
-        name: args.name,
-        email: args.email,
-        phone: args.phone,
-        licenseNumber: args.licenseNumber,
-        vehicleInfo: args.vehicleInfo,
-        isAvailable: false,
-        // A new driver waits for an admin to clear them before they can go
-        // online or accept a ride.
-        approvalStatus: "pending",
-        currentLocation: undefined,
-        createdAt: now,
-        updatedAt: now,
-      });
+    if (waitMs > 0) {
+      throw new Error(
+        `Please wait ${Math.ceil(waitMs / 1000)} seconds before asking for another code.`
+      );
     }
 
-    // Auto-login: return a session token so the user is immediately logged in
-    const token = generateSessionToken();
-    await ctx.db.insert("sessions", {
-      userId,
-      token,
-      expiresAt: now + SESSION_TTL_MS,
-      createdAt: now,
-      isRevoked: false,
+    const code = generateOtpCode();
+    const salt = newOtpSalt();
+    const codeHash = await hashOtp(code, salt);
+    const passwordHash = await hashPassword(args.password);
+    const expiresAt = Date.now() + OTP_TTL_MS;
+
+    await ctx.runMutation(internal.signupCodes.create, {
+      codeHash,
+      email,
+      expiresAt,
+      licenseNumber: args.licenseNumber,
+      name: args.name,
+      passwordHash,
+      phone,
+      role: args.role,
+      // The code is only kept in the clear when the deployment has
+      // explicitly turned the sandbox on, so the mailbox can show it.
+      sandboxCode: sandboxEnabled() ? code : undefined,
+      salt,
+      vehicleInfo: args.vehicleInfo,
     });
 
-    return { sessionToken: token, role: args.role };
+    await emailProvider().send(
+      otpEmailMessage({
+        code,
+        name: args.name,
+        to: email,
+        validMinutes: Math.round(OTP_TTL_MS / 60_000),
+      })
+    );
+
+    return {
+      email,
+      expiresInSeconds: Math.round(OTP_TTL_MS / 1000),
+      resendInSeconds: Math.round(RESEND_COOLDOWN_MS / 1000),
+    };
+  },
+});
+
+/**
+ * Verifies the code, and creates the account.
+ *
+ * The second half of signing up. The code has to be right, the terms have to
+ * have been accepted, and only then does an account exist — all in one
+ * transaction, so a code can never create an account on its own.
+ */
+export const verifySignupCode = mutation({
+  args: {
+    email: v.string(),
+    code: v.string(),
+    // The terms have to be accepted before an account exists. The tick box
+    // on the client is a courtesy; this is the control.
+    acceptedTerms: v.boolean(),
+    // The version that was accepted, so an acceptance is never recorded
+    // without saying which terms it was for.
+    acceptedTermsVersion: v.string(),
+  },
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ role: "commuter" | "operator"; sessionToken: string }> => {
+    if (!args.acceptedTerms) {
+      throw new Error(
+        "You must accept the Terms and Conditions to create an account"
+      );
+    }
+
+    const email = normaliseEmail(args.email);
+    const pending = await ctx.runQuery(internal.signupCodes.pending, { email });
+
+    if (!pending) {
+      throw new Error(
+        "That code has expired or has already been used. Ask for a new one."
+      );
+    }
+
+    if (pending.attempts >= MAX_OTP_ATTEMPTS) {
+      throw new Error("Too many wrong attempts. Ask for a new code.");
+    }
+
+    const matches = await matchesOtp(
+      args.code.trim(),
+      pending.salt,
+      pending.codeHash
+    );
+    if (!matches) {
+      const attempts = await ctx.runMutation(
+        internal.signupCodes.recordAttempt,
+        {
+          id: pending.id as Id<"signupCodes">,
+        }
+      );
+      const left = Math.max(0, MAX_OTP_ATTEMPTS - attempts);
+      throw new Error(
+        left > 0
+          ? `That code is not right. ${left} attempt${left === 1 ? "" : "s"} left.`
+          : "Too many wrong attempts. Ask for a new code."
+      );
+    }
+
+    // The address and the number are checked again here, in a transaction,
+    // where the answer counts. Two codes for the same address can be
+    // requested, but only one account can exist.
+    const takenEmail = await ctx.runQuery(internal.signupCodes.emailTaken, {
+      email,
+    });
+    if (takenEmail) {
+      throw new Error("Email already registered");
+    }
+    const takenPhone = await ctx.runQuery(internal.signupCodes.phoneTaken, {
+      phone: pending.phone,
+    });
+    if (takenPhone) {
+      throw new Error("Phone number already registered");
+    }
+
+    const created = await createAccountFromSignup(ctx, {
+      acceptedTermsVersion: args.acceptedTermsVersion,
+      email: pending.email,
+      licenseNumber: pending.licenseNumber,
+      name: pending.name,
+      passwordHash:
+        (await ctx.db.get(pending.id as Id<"signupCodes">))?.passwordHash ?? "",
+      phone: pending.phone,
+      role: pending.role,
+      vehicleInfo: pending.vehicleInfo,
+    });
+
+    await ctx.runMutation(internal.signupCodes.markUsed, {
+      id: pending.id as Id<"signupCodes">,
+    });
+
+    return { role: created.role, sessionToken: created.sessionToken };
+  },
+});
+
+/**
+ * Changes the password of the signed-in account.
+ *
+ * The current password has to be given, so that nobody who finds a phone with
+ * the app open can lock the owner out of their own account. The session is
+ * left alone: changing a password is not a sign-out.
+ */
+export const changePassword = mutation({
+  args: {
+    sessionToken: v.string(),
+    currentPassword: v.string(),
+    newPassword: v.string(),
+  },
+  returns: v.object({ changed: v.boolean(), role: v.string() }),
+  handler: async (ctx, args) => {
+    const { userId, role } = await requireAuth(ctx, args.sessionToken);
+
+    validatePassword(args.newPassword);
+
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      throw new Error("Account not found");
+    }
+
+    const check = await verifyPassword(args.currentPassword, user.passwordHash);
+    if (!check.valid) {
+      throw new Error("Your current password is not right");
+    }
+
+    await ctx.db.patch(userId, {
+      passwordHash: await hashPassword(args.newPassword),
+      updatedAt: Date.now(),
+    });
+
+    // Every other session on this account is ended, so a password change
+    // actually locks out anyone who had copied it.
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .collect();
+
+    for (const session of sessions) {
+      if (session.token !== args.sessionToken) {
+        await ctx.db.patch(session._id, { isRevoked: true });
+      }
+    }
+
+    return { changed: true, role };
   },
 });
 
@@ -289,6 +485,19 @@ export const logout = mutation({
       .first();
     if (session) {
       await ctx.db.patch(session._id, { isRevoked: true });
+      // Logging out takes the user offline at once, and a driver off shift
+      // (fixoct51): a driver who has signed out is not taking rides.
+      await clearPresence(ctx, session.userId);
+      const operator = await ctx.db
+        .query("operators")
+        .withIndex("by_userId", (q) => q.eq("userId", session.userId))
+        .first();
+      if (operator?.isAvailable) {
+        await ctx.db.patch(operator._id, {
+          isAvailable: false,
+          updatedAt: Date.now(),
+        });
+      }
     }
     // Idempotent — no error if session not found
   },

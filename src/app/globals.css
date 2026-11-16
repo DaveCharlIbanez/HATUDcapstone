@@ -88,10 +88,17 @@
     --btn-primary-hover: var(--accent-hover);
     --btn-secondary: var(--secondary);
     --btn-secondary-hover: var(--secondary-hover);
-    --btn-success: #22c55e;
-    --btn-success-hover: #16a34a;
-    --btn-danger: #f87171;
-    --btn-danger-hover: #ef4444;
+    --btn-success: #16a34a;
+    --btn-success-hover: #15803d;
+    --btn-danger: #dc2626;
+    --btn-danger-hover: #b91c1c;
+
+    /* Motion */
+    --motion-settle-duration: 280ms;
+    --motion-settle-easing: cubic-bezier(0.32, 0.72, 0, 1);
+    --motion-ripple-duration: 460ms;
+    --motion-ripple-easing: cubic-bezier(0.4, 0, 0.2, 1);
+    --motion-loader-cycle: 1.1s;
   }
 }
 
@@ -286,10 +293,478 @@ body {
    scoped to the canvas so they don't fight overlay scroll panels on mobile. */
 .maplibregl-map {
   touch-action: none;
+  transition: opacity 240ms ease;
+
+  /* The map is lifted out of the page-level theme transition and cross-fades
+     on its own layer, so the ripple never clips a frozen canvas. */
+  view-transition-name: map;
 }
 
 /* Hide MapLibre logo and attribution */
 .maplibregl-ctrl-logo,
 .maplibregl-ctrl-attrib {
   display: none !important;
+}
+
+/* Draggable bottom sheet. The height is written straight to the DOM during a
+   drag, so the transition has to be switched off for the duration of it. */
+.drag-sheet {
+  transition: height var(--motion-settle-duration) var(--motion-settle-easing);
+}
+
+.drag-sheet[data-dragging="true"] {
+  transition: none;
+}
+
+.drag-sheet[data-dragging="true"] .drag-sheet-grip {
+  background-color: var(--accent);
+}
+
+@keyframes loader-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0) scale(0.6);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1);
+  }
+}
+
+.loader-dot {
+  animation: loader-dot var(--motion-loader-cycle) ease-in-out infinite;
+}
+
+.loader-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.loader-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* Theme ripple. The default cross-fade is switched off: the new theme is
+   revealed by a circle growing out of the theme control instead. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
+  animation: none;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+/* While the ripple runs the page must not also cross-fade its own colours,
+   or the two animations fight each other. */
+html[data-theme-transition="active"] *,
+html[data-theme-transition="active"] *::before,
+html[data-theme-transition="active"] *::after {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-settle-duration: 0ms;
+    --motion-ripple-duration: 0ms;
+    --motion-loader-cycle: 2.4s;
+  }
+
+  .loader-dot {
+    animation-name: loader-dot-static;
+  }
+}
+
+@keyframes loader-dot-static {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ─── Landing page: the HATUD reveal ─────────────────────────────────────────
+   Two states on `.landing[data-state]`: "idle" (HATUD raised in the centre)
+   and "revealed" (HATUD lifted into the header, the story eased in below).
+   Only transform and opacity animate, so nothing reflows. */
+
+.landing {
+  --landing-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --landing-lift-duration: 700ms;
+  --landing-reveal-duration: 520ms;
+  --landing-top: calc(env(safe-area-inset-top, 0px) + 3rem);
+  /* The logo's width in the middle of the screen, and how far it shrinks
+     when it lifts into the header. */
+  --landing-logo-size: clamp(12rem, 62vw, 18rem);
+  --landing-logo-scale: 0.36;
+  --landing-actions-height: calc(env(safe-area-inset-bottom, 0px) + 5.5rem);
+}
+
+.landing-aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.landing-blob {
+  position: absolute;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 9999px;
+  opacity: 0.28;
+  filter: blur(80px);
+  animation: landing-aurora-drift 18s ease-in-out infinite alternate;
+}
+
+.landing-blob-a {
+  top: -30vmax;
+  left: -25vmax;
+  background: #38bdf8;
+}
+
+.landing-blob-b {
+  right: -30vmax;
+  bottom: -25vmax;
+  background: #6366f1;
+  animation-delay: -6s;
+}
+
+.landing-blob-c {
+  top: 35%;
+  left: 40%;
+  width: 40vmax;
+  height: 40vmax;
+  background: #a855f7;
+  opacity: 0.16;
+  animation-delay: -12s;
+}
+
+.landing-wordmark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 20;
+  cursor: pointer;
+  border-radius: 1.5rem;
+  padding: 0.5rem 1.25rem;
+  transform: translate(-50%, -50%);
+  transition: transform var(--landing-lift-duration) var(--landing-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.landing-wordmark:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.landing[data-state="revealed"] .landing-wordmark {
+  /* From the middle of the screen to the header line, and smaller. */
+  transform: translate(-50%, -50%)
+    translateY(calc(var(--landing-top) - 50dvh + 1.5rem))
+    scale(var(--landing-logo-scale));
+}
+
+.landing-wordmark-float {
+  position: relative;
+  display: block;
+  animation: landing-float 6s ease-in-out infinite;
+}
+
+.landing[data-state="revealed"] .landing-wordmark-float {
+  animation-play-state: paused;
+}
+
+.landing-logo {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: var(--landing-logo-size);
+  max-width: none;
+  pointer-events: none;
+  /* The lift: a tight shadow for the edge, and a wide sky-blue glow that
+     matches the aurora behind it, so the logo sits in the scene instead of
+     on top of it. */
+  filter: drop-shadow(0 2px 2px rgba(15, 23, 42, 0.22))
+    drop-shadow(0 18px 30px rgba(56, 189, 248, 0.32));
+}
+
+/* The pool of shadow under the floating word. */
+.landing-wordmark-shadow {
+  position: absolute;
+  bottom: -1.25rem;
+  left: 15%;
+  width: 70%;
+  height: 0.9rem;
+  background: radial-gradient(rgba(79, 70, 229, 0.35), transparent 70%);
+  border-radius: 9999px;
+  filter: blur(6px);
+  animation: landing-shadow 6s ease-in-out infinite;
+}
+
+/* ─── The HATUD logo on a dark theme ──────────────────────────────────────────
+   The artwork's tagline is dark navy with no white outline under it, so on a
+   dark background it disappears. A tight white halo, the same white as the
+   logo's own sticker outline, brings it back without changing the artwork.
+   `.hatud-logo` is set by <HatudLogo>; the landing keeps its glow on top. */
+[data-theme="dark"] .hatud-logo {
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95))
+    drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.55));
+}
+
+[data-theme="dark"] .landing-logo {
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95))
+    drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.55))
+    drop-shadow(0 18px 30px rgba(56, 189, 248, 0.32));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .hatud-logo {
+    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95))
+      drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.55));
+  }
+
+  :root:not([data-theme="light"]) .landing-logo {
+    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95))
+      drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.55))
+      drop-shadow(0 18px 30px rgba(56, 189, 248, 0.32));
+  }
+}
+
+.landing-hint {
+  position: absolute;
+  /* Below the logo: half its height (it is about as tall as it is wide),
+     plus room for the shadow under it. */
+  top: calc(50% + var(--landing-logo-size) / 2 + 1.5rem);
+  right: 0;
+  left: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  transition:
+    opacity 300ms var(--landing-ease),
+    transform 300ms var(--landing-ease);
+  animation: landing-hint-pulse 2.4s ease-in-out infinite;
+}
+
+.landing[data-state="revealed"] .landing-hint {
+  opacity: 0;
+  transform: translateY(0.5rem);
+  animation: none;
+}
+
+.landing-about {
+  position: absolute;
+  /* Clear of the logo once it has lifted into the header. */
+  top: calc(
+    var(--landing-top) +
+    var(--landing-logo-size) *
+    var(--landing-logo-scale) /
+    2 +
+    2.75rem
+  );
+  right: 0;
+  bottom: var(--landing-actions-height);
+  left: 0;
+  z-index: 10;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: none;
+}
+
+.landing[data-state="revealed"] .landing-about {
+  pointer-events: auto;
+}
+
+/* Each piece fades and rises in, one after another, starting as HATUD is
+   settling rather than after it. Going back, everything leaves at once. */
+.landing-reveal {
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 200ms var(--landing-ease),
+    transform 200ms var(--landing-ease);
+}
+
+.landing[data-state="revealed"] .landing-reveal {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--landing-reveal-duration) var(--landing-ease),
+    transform var(--landing-reveal-duration) var(--landing-ease);
+  transition-delay: calc(var(--i, 0) * 55ms + 250ms);
+}
+
+.landing-actions {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  gap: 0.75rem;
+  max-width: 28rem;
+  padding: 1rem 1rem calc(env(safe-area-inset-bottom, 0px) + 1.25rem);
+  margin: 0 auto;
+}
+
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes landing-shadow {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  50% {
+    opacity: 0.6;
+    transform: scaleX(0.85);
+  }
+}
+
+@keyframes landing-hint-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes landing-aurora-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  to {
+    transform: translate3d(6vmax, 4vmax, 0) scale(1.12);
+  }
+}
+
+/* Reduced motion: no float, no drift, no travel — only the fade. HATUD
+   still moves to the header, but instantly. */
+@media (prefers-reduced-motion: reduce) {
+  .landing-blob,
+  .landing-wordmark-float,
+  .landing-wordmark-shadow,
+  .landing-hint {
+    animation: none;
+  }
+
+  .landing-wordmark {
+    transition: none;
+  }
+
+  .landing-reveal,
+  .landing[data-state="revealed"] .landing-reveal {
+    transform: none;
+    transition-delay: 0ms;
+    transition-property: opacity;
+  }
+}
+
+/* ─── Page-to-page motion (fixoct50) ──────────────────────────────────────────
+   A native-style push and pop between the landing page and sign-in, driven by
+   transform. `data-route-leave` plays on the page being left; once the route
+   changes, `data-route-enter` plays on the page arriving. Only the leaving
+   page dims a little; nothing cross-fades. See `src/lib/routeTransition.tsx`. */
+
+.route-viewport {
+  /* A page sliding in from the edge must not make the screen scroll
+     sideways while it travels. */
+  overflow-x: clip;
+}
+
+.route-stage {
+  --route-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --route-ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+}
+
+/* forward: landing → sign in */
+.route-stage[data-route-leave="forward"] {
+  animation: route-push-out 220ms var(--route-ease-in) forwards;
+}
+
+.route-stage[data-route-enter="forward"] {
+  animation: route-push-in 440ms var(--route-ease-out);
+}
+
+/* back: sign in → landing */
+.route-stage[data-route-leave="back"] {
+  animation: route-pop-out 220ms var(--route-ease-in) forwards;
+}
+
+.route-stage[data-route-enter="back"] {
+  animation: route-pop-in 440ms var(--route-ease-out);
+}
+
+/* The page being covered drifts left, a touch smaller, as if it slides under
+   the one arriving. */
+@keyframes route-push-out {
+  to {
+    transform: translate3d(-28%, 0, 0) scale(0.97);
+    opacity: 0.4;
+  }
+}
+
+/* The new page sweeps in from the right edge. */
+@keyframes route-push-in {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Going back, the top page slides away to the right… */
+@keyframes route-pop-out {
+  to {
+    transform: translate3d(100%, 0, 0);
+  }
+}
+
+/* …and the page underneath glides back from where it was pushed. */
+@keyframes route-pop-in {
+  from {
+    transform: translate3d(-28%, 0, 0) scale(0.97);
+    opacity: 0.4;
+  }
+
+  to {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-stage[data-route-enter],
+  .route-stage[data-route-leave] {
+    animation: none;
+  }
 }

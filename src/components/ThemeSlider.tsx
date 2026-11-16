@@ -1,15 +1,32 @@
 "use client";
 
+import { useRef } from "react";
 import { FiMoon, FiSun } from "react-icons/fi";
 import { useTheme } from "@/lib/themeContext";
+import { useReducedMotion } from "@/lib/useReducedMotion";
 
 export function ThemeSlider() {
   // The provider always exposes a theme, so there is no need for a local
   // mounted flag (and no setState during render).
   const { theme, setTheme } = useTheme();
+  const reducedMotion = useReducedMotion();
+  const knobRef = useRef<HTMLSpanElement>(null);
 
+  // The ripple starts at the knob, not at the switch: the knob is where the
+  // user's eye already is.
   const handleToggle = () => {
-    setTheme(theme === "light" ? "dark" : "light");
+    const knob = knobRef.current;
+
+    if (reducedMotion || !knob) {
+      setTheme(theme === "light" ? "dark" : "light");
+      return;
+    }
+
+    const rect = knob.getBoundingClientRect();
+    setTheme(theme === "light" ? "dark" : "light", {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    });
   };
 
   return (
@@ -32,6 +49,7 @@ export function ThemeSlider() {
           className={`flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] shadow-lg transition-transform duration-200 ${
             theme === "dark" ? "translate-x-12" : "translate-x-0"
           }`}
+          ref={knobRef}
         >
           {theme === "light" ? (
             <FiSun className="h-5 w-5 text-white" />

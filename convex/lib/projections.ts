@@ -64,7 +64,19 @@ export interface CommuterCounterpartView {
  */
 export interface CommuterPublicView {
   _id: CommuterDoc["_id"];
-  name: string;
+  name: CommuterDoc["name"];
+}
+
+/**
+ * What a driver may see of a passenger who has an open request.
+ *
+ * This is deliberately less than `CommuterCounterpartView`: the phone number
+ * belongs to a counterpart on a ride the driver has accepted, not to every
+ * passenger in the deployment who happens to have a request open.
+ */
+export interface CommuterQueueView {
+  _id: CommuterDoc["_id"];
+  name: CommuterDoc["name"];
 }
 
 export function projectCommuterSelf(commuter: CommuterDoc): CommuterSelfView {
@@ -124,6 +136,22 @@ export function projectCommuterForCounterpart(
 export function projectCommuterPublic(
   commuter: CommuterDoc
 ): CommuterPublicView {
+  return {
+    _id: commuter._id,
+    name: commuter.name,
+  };
+}
+
+/**
+ * What a driver may see of a passenger who has an open request.
+ *
+ * This is deliberately less than `CommuterCounterpartView`: the phone number
+ * belongs to a counterpart on a ride the driver has accepted, not to every
+ * passenger in the deployment who happens to have a request open.
+ */
+export function projectCommuterForQueue(
+  commuter: CommuterDoc
+): CommuterQueueView {
   return {
     _id: commuter._id,
     name: commuter.name,

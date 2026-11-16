@@ -1,15 +1,18 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { FaCheck, FaStar } from "react-icons/fa";
-import { formatDate, formatPeso, vehicleLabel } from "@/lib/format";
+import {
+  formatDate,
+  formatPeso,
+  formatSince,
+  paymentMethodLabel,
+} from "@/lib/format";
 import type {
   AdminDashboard,
   AdminDriverRow,
 } from "../../../convex/adminQueries";
 import { DetailRow, EmptyState, StatusPill } from "./DetailRow";
-
-type Driver = AdminDashboard["drivers"][number];
 
 function coordinates(
   location: { latitude: number; longitude: number } | null
@@ -28,46 +31,205 @@ function MetaItem({ children }: { children: ReactNode }) {
   return <span>{children}</span>;
 }
 
-export function DriversPanel({ drivers }: { drivers: Driver[] }) {
-  const online = drivers.filter((driver) => driver.isAvailable);
+type UserCategory = "both" | "commuter" | "operator";
 
-  if (online.length === 0) {
-    return <EmptyState message="No drivers are online right now." />;
+const CATEGORIES: { id: UserCategory; label: string; noun: string }[] = [
+  { id: "both", label: "Both", noun: "users" },
+  { id: "commuter", label: "Commuters", noun: "commuters" },
+  { id: "operator", label: "Operators", noun: "operators" },
+];
+
+const CATEGORY_BY_ID = Object.fromEntries(
+  CATEGORIES.map((entry) => [entry.id, entry])
+) as Record<UserCategory, (typeof CATEGORIES)[number]>;
+
+type UserRow = AdminDashboard["userRoster"]["commuters"][number];
+
+function rowsFor(
+  roster: AdminDashboard["userRoster"],
+  category: UserCategory
+): UserRow[] {
+  if (category === "commuter") {
+    return roster.commuters;
   }
+  if (category === "operator") {
+    return roster.operators;
+  }
+  // Same order as each list: online first, then the most recently seen.
+  return [...roster.commuters, ...roster.operators].sort(
+    (a, b) =>
+      Number(b.isOnline) - Number(a.isOnline) ||
+      (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0) ||
+      a.name.localeCompare(b.name)
+  );
+}
 
+function presenceLabel(user: UserRow): string {
+  if (user.isOnline) {
+    return `Seen ${formatSince(user.lastSeenAt ?? Date.now())}`;
+  }
+  return user.lastSeenAt === null
+    ? "Never seen in the app"
+    : `Last seen ${formatSince(user.lastSeenAt)}`;
+}
+
+function UserStatusPill({ user }: { user: UserRow }) {
+  if (!user.isOnline) {
+    return <StatusPill tone="slate">Offline</StatusPill>;
+  }
+  if (user.role === "operator") {
+    return (
+      <StatusPill tone={user.isAvailable ? "emerald" : "sky"}>
+        {user.isAvailable ? "On shift" : "Online · off shift"}
+      </StatusPill>
+    );
+  }
+  return <StatusPill tone="emerald">Online</StatusPill>;
+}
+
+function UserList({
+  showRole,
+  users,
+}: {
+  showRole: boolean;
+  users: UserRow[];
+}) {
   return (
     <div className="space-y-3">
-      {online.map((driver) => {
-        const position = coordinates(driver.currentLocation);
-        return (
-          <DetailRow
-            key={driver._id}
-            meta={
-              <>
-                <MetaItem>{driver.vehicleInfo.model}</MetaItem>
-                <MetaSeparator />
-                <MetaItem>{driver.vehicleInfo.plateNumber}</MetaItem>
-                <MetaSeparator />
-                <MetaItem>Licence {driver.licenseNumber}</MetaItem>
-                <MetaSeparator />
-                <MetaItem>
-                  <FaStar className="mr-1 inline text-amber-400" />
-                  {driver.averageRating > 0 ? driver.averageRating : "—"} (
-                  {driver.ratingCount})
-                </MetaItem>
-                {position ? (
-                  <>
-                    <MetaSeparator />
-                    <MetaItem>{position}</MetaItem>
-                  </>
-                ) : null}
-              </>
-            }
-            title={driver.name}
-            trailing={<StatusPill tone="emerald">Online</StatusPill>}
-          />
-        );
-      })}
+      {users.map((user) => (
+        <DetailRow
+          key={user.userId}
+          meta={
+            <>
+              {showRole ? (
+                <>
+                  <MetaItem>
+                    {user.role === "commuter" ? "Commuter" : "Operator"}
+                  </MetaItem>
+                  <MetaSeparator />
+                </>
+              ) : null}
+              <MetaItem>{user.email}</MetaItem>
+              <MetaSeparator />
+              <MetaItem>{presenceLabel(user)}</MetaItem>
+            </>
+          }
+          title={user.name}
+          trailing={<UserStatusPill user={user} />}
+        />
+      ))}
+    </div>
+  );
+}
+
+function AllUsers({
+  noun,
+  showRole,
+  users,
+}: {
+  noun: string;
+  showRole: boolean;
+  users: UserRow[];
+}) {
+  if (users.length === 0) {
+    return <EmptyState message={`There are no ${noun} yet.`} />;
+  }
+  return (
+    <div className="space-y-2">
+      <p className="font-semibold text-[var(--text-muted)] text-xs uppercase tracking-wide">
+        All {noun} ({users.length})
+      </p>
+      <UserList showRole={showRole} users={users} />
+    </div>
+  );
+}
+
+/**
+ * Who is using the app (fixoct51): one list for commuters and operators,
+ * filtered by category, with the whole roster behind a button at the bottom.
+ */
+export function UsersPanel({
+  roster,
+}: {
+  roster: AdminDashboard["userRoster"];
+}) {
+  const [category, setCategory] = useState<UserCategory>("both");
+  const [showAll, setShowAll] = useState(false);
+
+  const selected = CATEGORY_BY_ID[category];
+  const everyone = rowsFor(roster, category);
+  const active = everyone.filter((user) => user.isOnline);
+  const onShift = rowsFor(roster, "operator").filter(
+    (user) => user.isOnline && user.isAvailable
+  ).length;
+  const showRole = category === "both";
+
+  return (
+    <div className="space-y-4">
+      <fieldset className="grid grid-cols-3 gap-1 rounded-2xl border-0 bg-[var(--surface-strong)] p-1">
+        <legend className="sr-only">Show which users</legend>
+        {CATEGORIES.map((entry) => {
+          const isSelected = entry.id === category;
+          const count = rowsFor(roster, entry.id).filter(
+            (user) => user.isOnline
+          ).length;
+          return (
+            <button
+              aria-pressed={isSelected}
+              className={`min-h-11 rounded-xl px-2 py-2 font-semibold text-sm transition ${
+                isSelected
+                  ? "bg-sky-600 text-white shadow"
+                  : "text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
+              }`}
+              key={entry.id}
+              onClick={() => {
+                setCategory(entry.id);
+                setShowAll(false);
+              }}
+              type="button"
+            >
+              {entry.label}
+              <span className="ml-1 tabular-nums opacity-80">({count})</span>
+            </button>
+          );
+        })}
+      </fieldset>
+
+      <p className="text-[var(--text-muted)] text-sm">
+        <span className="font-semibold text-[var(--foreground)] tabular-nums">
+          {active.length}
+        </span>{" "}
+        of {everyone.length} {selected.noun} online
+        {category === "commuter" ? null : (
+          <>
+            {" "}
+            · {onShift} {onShift === 1 ? "driver" : "drivers"} on shift
+          </>
+        )}
+      </p>
+
+      {active.length === 0 ? (
+        <EmptyState
+          message={`No ${selected.noun} have the app open right now.`}
+        />
+      ) : (
+        <UserList showRole={showRole} users={active} />
+      )}
+
+      <button
+        aria-expanded={showAll}
+        className="w-full rounded-2xl border border-[var(--border)] py-3 font-semibold text-[var(--foreground)] text-sm transition hover:bg-[var(--surface-strong)]"
+        onClick={() => setShowAll((current) => !current)}
+        type="button"
+      >
+        {showAll
+          ? `Hide all ${selected.noun}`
+          : `See all ${selected.noun} (${everyone.length})`}
+      </button>
+
+      {showAll ? (
+        <AllUsers noun={selected.noun} showRole={showRole} users={everyone} />
+      ) : null}
     </div>
   );
 }
@@ -95,7 +257,6 @@ export function LiveRidesPanel({
                 <MetaSeparator />
                 <MetaItem>{ride.dropoffAddress}</MetaItem>
                 <MetaSeparator />
-                <MetaItem>{vehicleLabel(ride.vehicleType)}</MetaItem>
                 <MetaSeparator />
                 <MetaItem>{formatPeso(ride.fare)}</MetaItem>
                 {driverPosition ? (
@@ -324,7 +485,7 @@ export function CompletedRidesPanel({
               <MetaItem>{formatDate(ride.createdAt)}</MetaItem>
             </>
           }
-          title={`${formatPeso(ride.fare)} · ${vehicleLabel(ride.vehicleType)}`}
+          title={formatPeso(ride.fare)}
           trailing={<StatusPill tone="emerald">Completed</StatusPill>}
         />
       ))}
@@ -341,14 +502,37 @@ export function RevenuePanel({
     return <EmptyState message="No settled payments recorded yet." />;
   }
 
+  // The revenue is read by method: cash collected by a driver and a wallet
+  // charge are different money, and an operator needs to know which is which.
+  const byMethod = new Map<string, number>();
+  for (const payment of payments) {
+    byMethod.set(
+      payment.provider,
+      (byMethod.get(payment.provider) ?? 0) + payment.amount
+    );
+  }
+
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {[...byMethod.entries()].map(([method, total]) => (
+          <span
+            className="rounded-full bg-[var(--surface-strong)] px-3 py-1 text-xs"
+            key={method}
+          >
+            {paymentMethodLabel(method)} · {formatPeso(total)}
+          </span>
+        ))}
+      </div>
+
       {payments.map((payment) => (
         <DetailRow
           key={payment._id}
           meta={
             <>
               <MetaItem>{payment.riderName}</MetaItem>
+              <MetaSeparator />
+              <MetaItem>{paymentMethodLabel(payment.provider)}</MetaItem>
               <MetaSeparator />
               <MetaItem>{payment.referenceNumber}</MetaItem>
               <MetaSeparator />
@@ -471,11 +655,11 @@ export function CancellationsPanel({
             return (
               <div
                 className="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-4"
-                key={row.type}
+                key="all"
               >
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-semibold text-[var(--foreground)] text-sm">
-                    {vehicleLabel(row.type)}
+                    All rides
                   </p>
                   <p className="font-semibold text-[var(--foreground)] text-sm">
                     {row.cancelled} cancelled · {row.completed} completed

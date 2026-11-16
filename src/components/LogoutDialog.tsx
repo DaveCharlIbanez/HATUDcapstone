@@ -3,41 +3,11 @@
 import { useEffect, useRef } from "react";
 import { FaSignOutAlt } from "react-icons/fa";
 import { useAuth } from "@/lib/authContext";
+import { trapFocus } from "@/lib/focusTrap";
 
 interface LogoutDialogProps {
   isOpen: boolean;
   onClose: () => void;
-}
-
-/**
- * Keeps the keyboard inside the dialog: Tab cycles between the buttons and
- * never escapes to the page behind.
- */
-function trapFocus(event: KeyboardEvent, panel: HTMLDivElement | null): void {
-  if (event.key !== "Tab") {
-    return;
-  }
-
-  const focusable = [
-    ...(panel?.querySelectorAll<HTMLElement>("button:not([disabled])") ?? []),
-  ];
-  if (focusable.length === 0) {
-    return;
-  }
-
-  const first = focusable.at(0);
-  const last = focusable.at(-1);
-  if (!(first && last)) {
-    return;
-  }
-
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
 }
 
 /**

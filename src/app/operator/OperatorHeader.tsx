@@ -10,10 +10,15 @@ export interface OperatorProfileView {
 }
 
 interface OperatorHeaderProps {
+  locationError: string | null;
   online: boolean;
   onToggleOnline: () => void;
   profile: OperatorProfileView | undefined;
   theme: string;
+  /** How many requests are waiting. */
+  waitingCount: number;
+  /** The driver is off shift and there are requests waiting. */
+  waitingForShift: boolean;
 }
 
 function onlineToggleClass(theme: string): string {
@@ -30,13 +35,47 @@ function offlineToggleClass(theme: string): string {
 
 export function OperatorHeader({
   profile,
-  theme,
   online,
   onToggleOnline,
+  theme,
+  locationError,
+  waitingForShift,
+  waitingCount,
 }: OperatorHeaderProps) {
   return (
     <>
-      <div className="absolute top-0 right-0 left-0 z-10 hidden bg-gradient-to-b from-black/50 to-transparent p-4 md:block">
+      {/* The driver has to know when their position is not being shared: the
+          passenger cannot see a driver the server has no position for. */}
+      {locationError && (
+        <div className="mx-2 mt-2 rounded-2xl border border-red-400/40 bg-red-500/15 px-3 py-2 backdrop-blur md:mx-4">
+          <p className="text-red-100 text-xs md:text-sm">{locationError}</p>
+          <p className="mt-0.5 text-[10px] text-red-200/80 md:text-xs">
+            Your passenger cannot see you until your position is shared.
+          </p>
+        </div>
+      )}
+
+      {/* An approved driver is off shift until they say otherwise, and the
+          server refuses to let them take a ride while they are. */}
+      {waitingForShift && (
+        <div className="mx-2 mt-2 flex items-center justify-between gap-3 rounded-2xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 backdrop-blur md:mx-4">
+          <p className="text-amber-100 text-xs md:text-sm">
+            {waitingCount} request{waitingCount === 1 ? "" : "s"} waiting. Go
+            online to take one.
+          </p>
+          <button
+            className="shrink-0 rounded-lg bg-amber-400 px-3 py-1.5 font-semibold text-amber-950 text-xs transition hover:bg-amber-300 md:text-sm"
+            onClick={onToggleOnline}
+            type="button"
+          >
+            Go online
+          </button>
+        </div>
+      )}
+
+      {/* The menu button floats at the top left, so the header starts clear
+          of it. */}
+      <div className="absolute top-0 right-0 left-0 z-10 hidden bg-gradient-to-b from-black/50 to-transparent p-4 md:pl-[4.5rem]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--surface-muted)] text-sky-600 dark:text-sky-300">

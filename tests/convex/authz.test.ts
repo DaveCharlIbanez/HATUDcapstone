@@ -74,7 +74,7 @@ test("a commuter sees only their own active ride and a projected driver", async 
     sessionToken: commuter.sessionToken,
   });
 
-  expect(active?.ride.status).toBe("accepted");
+  expect(active?.ride?.status).toBe("accepted");
   expect(active?.partner?.kind).toBe("operator");
   if (active?.partner?.kind === "operator") {
     expect(active.partner.name).toBe("Operator Two");
@@ -188,13 +188,13 @@ test("only operators may list pending rides", async () => {
   });
 
   await expect(
-    t.query(api.rides.listPendingWithCommuter, {
+    t.query(api.rides.listPendingForMe, {
       sessionToken: commuter.sessionToken,
     })
   ).rejects.toThrow("Forbidden");
 });
 
-test("the pending-ride list projects the passenger to name and phone only", async () => {
+test("the pending-ride list projects the passenger to their name only", async () => {
   const t = createTest();
   const commuter = await seedAccount(t, {
     email: "commuter7@example.com",
@@ -209,20 +209,47 @@ test("the pending-ride list projects the passenger to name and phone only", asyn
     role: "operator",
   });
 
-  await seedRide(t, commuter.commuterId, {
-    operatorId: operator.operatorId,
-  });
+  await seedRide(t, commuter.commuterId);
 
-  const pending = await t.query(api.rides.listPendingWithCommuter, {
+  const pending = await t.query(api.rides.listPendingForMe, {
     sessionToken: operator.sessionToken,
   });
 
   expect(pending.length).toBe(1);
   const entry = pending[0];
   expect(entry?.commuter?.name).toBe("Commuter Seven");
-  expect(entry?.commuter?.phone).toBe("+639000000013");
+  // The phone number belongs to a counterpart on an accepted ride. Handing it
+  // out for every open request in the system leaked it to every driver.
+  expect(entry?.commuter).not.toHaveProperty("phone");
   expect(entry?.commuter).not.toHaveProperty("email");
   expect(entry?.commuter).not.toHaveProperty("savedLocations");
+});
+
+test("a pending request that already names a driver is not claimable", async () => {
+  const t = createTest();
+  const commuter = await seedAccount(t, {
+    email: "commuter8@example.com",
+    name: "Commuter Eight",
+    phone: "+639000000015",
+    role: "commuter",
+  });
+  const operator = await seedAccount(t, {
+    email: "operator8@example.com",
+    name: "Operator Eight",
+    phone: "+639000000016",
+    role: "operator",
+  });
+
+  // The shape the seed used to create: pending, but already assigned.
+  await seedRide(t, commuter.commuterId, {
+    operatorId: operator.operatorId,
+  });
+
+  const pending = await t.query(api.rides.listPendingForMe, {
+    sessionToken: operator.sessionToken,
+  });
+
+  expect(pending.length).toBe(0);
 });
 
 test("legacy reads never expose saved addresses, licence numbers or phones", async () => {

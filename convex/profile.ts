@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
+import type { PaymentMethod } from "./lib/paymentMethods";
 import { resolveActor } from "./lib/withAuth";
 
 /**
@@ -36,13 +37,14 @@ export interface ProfileRide {
   pickupAddress: string;
   rating: number | null;
   status: "accepted" | "cancelled" | "completed" | "inProgress" | "pending";
-  vehicleType: string | null;
 }
 
 export interface ProfilePayment {
   amount: number;
   createdAt: number;
   id: Id<"payments">;
+  /** Where the money moved, so the history can say which method it was. */
+  provider: PaymentMethod;
   referenceNumber: string;
   status: string;
 }
@@ -92,7 +94,6 @@ export const commuterProfile = query({
           dropoffAddress: ride.dropoff.address,
           fare: ride.fare,
           status: ride.status,
-          vehicleType: ride.vehicleType ?? null,
           rating: feedback?.rating ?? null,
         };
       })
@@ -118,6 +119,7 @@ export const commuterProfile = query({
           id: payment._id,
           amount: payment.amount,
           createdAt: payment.createdAt,
+          provider: payment.provider,
           referenceNumber: payment.referenceNumber,
           status: payment.status,
         })
@@ -170,7 +172,6 @@ export const operatorProfile = query({
           dropoffAddress: ride.dropoff.address,
           fare: ride.fare,
           status: ride.status,
-          vehicleType: ride.vehicleType ?? null,
           rating: null,
           commuterName: commuter?.name ?? "Passenger",
         };

@@ -73,7 +73,7 @@ test("a position carries the time it was recorded", async () => {
 
   const rideId = await seedRide(t, commuter.commuterId, {
     operatorId: operator.operatorId,
-    status: "inProgress",
+    status: "accepted",
   });
 
   const before = Date.now();

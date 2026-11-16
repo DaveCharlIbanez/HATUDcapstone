@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import maplibregl from "maplibre-gl";
 import type { RefObject } from "react";
 
@@ -9,17 +10,38 @@ interface LocateUserOptions {
   userMarkerRef: RefObject<maplibregl.Marker | null>;
 }
 
-function describeGeolocationError(code: number): string {
+/**
+ * Where the setting lives.
+ *
+ * On a phone the permission belongs to the app, so the instruction is the
+ * device's settings. In a browser it belongs to the browser. Telling a phone
+ * user to look in their browser settings sends them to the wrong place.
+ */
+export function locationSettingsHint(): string {
+  return Capacitor.isNativePlatform()
+    ? "Turn location on for HATUD in your device settings, then try again."
+    : "Turn location on for this site in your browser settings, then try again.";
+}
+
+/**
+ * What to tell the user when the position cannot be read.
+ *
+ * The wording has to be right on a phone as well as in a browser: on Android
+ * the app asks for the runtime permission and the setting lives in the app's
+ * own permission screen, so "your browser settings" sends the reader to the
+ * wrong place.
+ */
+export function describeGeolocationError(code: number): string {
   if (code === 1) {
-    return "Location permission denied. Please allow location access in your browser settings.";
+    return `Location access was refused. ${locationSettingsHint()}`;
   }
   if (code === 2) {
-    return "Location unavailable. Please try again.";
+    return "Your location is not available right now. Check that your device's location is on, then try again.";
   }
   if (code === 3) {
-    return "Location request timed out. Please try again.";
+    return "Your location took too long to arrive. Please try again.";
   }
-  return "Unable to get location";
+  return "Could not get your location. Please try again.";
 }
 
 /**

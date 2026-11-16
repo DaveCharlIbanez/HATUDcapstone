@@ -47,6 +47,23 @@
       }
     }
   },
+  "overrides": [
+    {
+      // A scrollable region has to be reachable with the keyboard, or long
+      // text cannot be read without a mouse. The rule does not know about
+      // scrollable regions, and a line-positioned suppression comment does not
+      // survive the formatter moving the attribute, so the rule is turned off
+      // for the one file that has one.
+      "includes": ["src/components/TermsDialog.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noNoninteractiveTabindex": "off"
+          }
+        }
+      }
+    }
+  ],
   "css": {
     "parser": {
       "cssModules": true,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import {
   createContext,
@@ -34,12 +34,20 @@ interface AuthContextType {
     password: string
   ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  /** Asks for a sign-up code and sends it to the address. */
+  requestSignupCode: (
+    data: SignupDetails
+  ) => Promise<{ success: boolean; error?: string; sentTo?: string }>;
   sessionToken: string | null;
-  signup: (data: SignupData) => Promise<{ success: boolean; error?: string }>;
   user: User | null;
+  /** Verifies the code and creates the account. */
+  verifySignupCode: (
+    data: SignupCodeVerification
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
-interface SignupData {
+/** Everything needed to ask for a sign-up code. */
+export interface SignupDetails {
   email: string;
   licenseNumber?: string;
   name: string;
@@ -53,6 +61,17 @@ interface SignupData {
   };
 }
 
+/** The code, and the acceptance of the terms. */
+export interface SignupCodeVerification {
+  /** The terms and conditions have been read and accepted. */
+  acceptedTerms: boolean;
+  /** The version of the terms that was accepted. */
+  acceptedTermsVersion: string;
+  /** The code that was emailed. */
+  code: string;
+  email: string;
+}
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
 /**
@@ -63,6 +82,9 @@ const AuthContext = createContext<AuthContextType | null>(null);
  * server runtime, which the Capacitor static export does not have.
  */
 const STORAGE_KEY = "hatud_session_token";
+
+/** How often a signed-in app tells the server it is open (fixoct51). */
+const HEARTBEAT_INTERVAL_MS = 45 * 1000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionToken, setSessionToken] = useState<string | null>(() =>
@@ -109,8 +131,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [sessionData, sessionToken]);
 
   const loginMutation = useMutation(api.auth.login);
-  const signupMutation = useMutation(api.auth.signup);
+  const requestSignupCodeMutation = useAction(api.auth.requestSignupCode);
+  const verifySignupCodeMutation = useMutation(api.auth.verifySignupCode);
   const logoutMutation = useMutation(api.auth.logout);
+  const heartbeatMutation = useMutation(api.presence.heartbeat);
+
+  // Presence (fixoct51): tell the server the app is open, every 45 seconds
+  // while the page is visible. A backgrounded WebView pauses its timers, so a
+  // closed or hidden app drops out of "online" on its own after two minutes.
+  const isSignedIn = isSessionValidated && sessionData !== null;
+  useEffect(() => {
+    if (!(isSignedIn && sessionToken)) {
+      return;
+    }
+    const beat = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      heartbeatMutation({ sessionToken }).catch(() => {
+        // Best effort: a missed beat only delays "online" by one interval.
+      });
+    };
+    beat();
+    const interval = window.setInterval(beat, HEARTBEAT_INTERVAL_MS);
+    document.addEventListener("visibilitychange", beat);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", beat);
+    };
+  }, [heartbeatMutation, isSignedIn, sessionToken]);
 
   const login = async (
     email: string,
@@ -129,11 +178,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signup = async (
-    data: SignupData
-  ): Promise<{ success: boolean; error?: string }> => {
+  const requestSignupCode = async (
+    data: SignupDetails
+  ): Promise<{ success: boolean; error?: string; sentTo?: string }> => {
     try {
-      const result = await signupMutation({
+      const result = await requestSignupCodeMutation({
         name: data.name,
         email: data.email,
         phone: data.phone,
@@ -142,13 +191,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         licenseNumber: data.licenseNumber,
         vehicleInfo: data.vehicleInfo,
       });
+      return { success: true, sentTo: result.email };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Could not send the code",
+      };
+    }
+  };
+
+  const verifySignupCode = async (
+    data: SignupCodeVerification
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const result = await verifySignupCodeMutation({
+        acceptedTerms: data.acceptedTerms,
+        acceptedTermsVersion: data.acceptedTermsVersion,
+        code: data.code,
+        email: data.email,
+      });
       localStorage.setItem(STORAGE_KEY, result.sessionToken);
       setSessionToken(result.sessionToken);
       return { success: true };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Signup failed",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not create the account",
       };
     }
   };
@@ -175,8 +247,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isSessionValidated,
         sessionToken,
         login,
-        signup,
         logout,
+        requestSignupCode,
+        verifySignupCode,
       }}
     >
       {children}

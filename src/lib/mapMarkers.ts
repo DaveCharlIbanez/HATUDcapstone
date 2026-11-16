@@ -2,6 +2,23 @@ import maplibregl from "maplibre-gl";
 import { CATEGORY_INFO, landmarks, MUNICIPALITY_LABELS } from "./landmarks";
 
 /**
+ * The two parties on a ride, in the same colours on both screens (fixoct52).
+ * Orange and violet stay clear of each other, of the green pickup and red
+ * drop-off pins, and of the green and sky-blue route lines.
+ */
+export const DRIVER_PIN_COLOR = "#f97316";
+export const COMMUTER_PIN_COLOR = "#8b5cf6";
+export const DRIVER_PIN_GLYPH = "🏍️";
+export const COMMUTER_PIN_GLYPH = "👤";
+
+/**
+ * Options for a pin that moves. Without sub-pixel positioning a marker snaps
+ * to whole pixels while the map under it moves by fractions, which makes a
+ * moving pin shake.
+ */
+export const MOVING_MARKER_OPTIONS = { subpixelPositioning: true } as const;
+
+/**
  * Marker elements for the map. Shared by the operator and commuter maps so
  * both render the same pins.
  */
@@ -64,20 +81,6 @@ export function createPartnerMarkerElement(
   element.style.justifyContent = "center";
   element.style.fontSize = "14px";
   element.textContent = glyph;
-  return element;
-}
-
-/**
- * The pin used for the rider's own position on the passenger map.
- */
-export function createSelfMarkerElement(color: string): HTMLElement {
-  const element = document.createElement("div");
-  element.style.width = "20px";
-  element.style.height = "20px";
-  element.style.backgroundColor = color;
-  element.style.borderRadius = "50%";
-  element.style.border = "3px solid white";
-  element.style.boxShadow = `0 0 8px ${color}80`;
   return element;
 }
 

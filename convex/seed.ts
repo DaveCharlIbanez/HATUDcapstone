@@ -165,31 +165,9 @@ async function seedDatabase(ctx: MutationCtx): Promise<void> {
     updatedAt: now,
   });
 
-  const operator2UserId = await ctx.db.insert("users", {
-    email: "operator2@hatud.com",
-    passwordHash: passwordHashDefault,
-    phone: "+639567890123",
-    role: "operator",
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  const operator2Id = await ctx.db.insert("operators", {
-    userId: operator2UserId,
-    name: "Antonio Mendoza",
-    email: "operator2@hatud.com",
-    phone: "+639567890123",
-    licenseNumber: "DR-2024-002",
-    vehicleInfo: {
-      plateNumber: "DEF 456",
-      model: "Honda PCX 160",
-      color: "Blue",
-    },
-    isAvailable: true,
-    currentLocation: { latitude: 10.5912, longitude: 121.9456 },
-    createdAt: now,
-    updatedAt: now,
-  });
+  // A second seed driver, Antonio Mendoza (operator2@hatud.com), was removed
+  // in fixoct51: nobody signed in as him, and his switched-on shift made the
+  // admin count a driver who was never there.
 
   const commuters = await ctx.db
     .query("commuters")
@@ -214,10 +192,11 @@ async function seedDatabase(ctx: MutationCtx): Promise<void> {
       latitude: 10.5923,
       longitude: 121.9476,
     },
-    vehicleType: "priority",
+    vehicleType: "standard",
     status: "inProgress",
     fare: 85.5,
     distance: 2.3,
+    paymentMethod: "gcash",
     createdAt: now,
     updatedAt: now,
   });
@@ -231,9 +210,12 @@ async function seedDatabase(ctx: MutationCtx): Promise<void> {
     createdAt: now,
   });
 
+  // An open request, so the driver's queue has something in it. It carries no
+  // driver: a pending ride that already names a driver is an inconsistent row
+  // that no driver can claim, and it would sit in every queue for good. The
+  // expiry cron drops it after fifteen minutes.
   await ctx.db.insert("rides", {
     commuterId: secondCommuter._id,
-    operatorId: operator2Id,
     pickup: {
       address: "789 University Ave, Sibalom, Antique",
       latitude: 10.5132,
@@ -248,6 +230,8 @@ async function seedDatabase(ctx: MutationCtx): Promise<void> {
     status: "pending",
     fare: 245.0,
     distance: 12.5,
+    paymentStatus: "unpaid",
+    paymentMethod: "cash",
     createdAt: now,
     updatedAt: now,
   });
@@ -270,6 +254,7 @@ async function seedDatabase(ctx: MutationCtx): Promise<void> {
     fare: 65.0,
     distance: 1.8,
     paymentStatus: "paid",
+    paymentMethod: "gcash",
     paidAt: now - 3_600_000,
     createdAt: now - 3_600_000,
     updatedAt: now - 3_600_000,

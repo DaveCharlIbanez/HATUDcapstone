@@ -3,7 +3,9 @@ import type { Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { DOCUMENT_KINDS } from "./documents";
 import { approvalStatusOf } from "./lib/approval";
+import type { PaymentMethod } from "./lib/paymentMethods";
 import { requireRole } from "./lib/withAuth";
+import { ONLINE_WINDOW_MS } from "./presence";
 
 /**
  * The admin dashboard.
@@ -27,6 +29,14 @@ export interface AdminDriverRow {
   documentKinds: string[];
   email: string;
   isAvailable: boolean;
+  /**
+   * On shift and the app was seen within `ONLINE_WINDOW_MS` (fixoct51).
+   * `isAvailable` alone is the shift switch, which stays on when the app is
+   * closed.
+   */
+  isOnline: boolean;
+  /** When the driver's app last sent a heartbeat, or null if never. */
+  lastSeenAt: number | null;
   licenseNumber: string;
   missingDocuments: string[];
   name: string;
@@ -45,7 +55,6 @@ export interface AdminRideRow {
   fare: number;
   pickupAddress: string;
   status: string;
-  vehicleType: string | null;
 }
 
 export interface AdminLiveRideRow extends AdminRideRow {
@@ -69,6 +78,8 @@ export interface AdminPaymentRow {
   _id: Id<"payments">;
   amount: number;
   createdAt: number;
+  /** Where the money moved, so the revenue can be read by method. */
+  provider: PaymentMethod;
   referenceNumber: string;
   riderName: string;
 }
@@ -82,10 +93,26 @@ export interface AdminFeedbackRow {
   riderName: string;
 }
 
+/** How many users of each type the roster lists. */
+const ROSTER_LIMIT = 500;
+
+/** A commuter or operator account, with whether its app is open (fixoct51). */
+export interface AdminUserRow {
+  email: string;
+  /** Operators only: whether the shift switch is on. */
+  isAvailable?: boolean;
+  /** The app sent a heartbeat within `ONLINE_WINDOW_MS`. */
+  isOnline: boolean;
+  /** The last heartbeat, or null if the app has never sent one. */
+  lastSeenAt: number | null;
+  name: string;
+  role: "commuter" | "operator";
+  userId: Id<"users">;
+}
+
 export interface AdminCancellationRow {
   cancelled: number;
   completed: number;
-  type: string;
 }
 
 export interface AdminDashboard {
@@ -101,6 +128,8 @@ export interface AdminDashboard {
   liveRides: AdminLiveRideRow[];
   metrics: {
     activeDrivers: number;
+    /** Commuters and operators with the app open right now. */
+    activeUsers: number;
     averageRating: number;
     approvedDrivers: number;
     cancelledTrips: number;
@@ -112,10 +141,20 @@ export interface AdminDashboard {
     rejectedDrivers: number;
     revenue: number;
     riders: number;
+    /** Every commuter and operator account. Admins are not counted. */
+    totalUsers: number;
   };
   payments: AdminPaymentRow[];
   recentRides: AdminRideRow[];
   riders: AdminRiderRow[];
+  /**
+   * Every commuter and every operator, online first, then by last seen. The
+   * admin filters it to the active users or shows the whole list.
+   */
+  userRoster: {
+    commuters: AdminUserRow[];
+    operators: AdminUserRow[];
+  };
 }
 
 export const getDashboard = query({
@@ -132,6 +171,21 @@ export const getDashboard = query({
     const rides = await ctx.db.query("rides").collect();
     const payments = await ctx.db.query("payments").collect();
     const feedback = await ctx.db.query("feedback").collect();
+
+    // Who has the app open (fixoct51). There is one presence row per user,
+    // so the table is no larger than the user table read above.
+    const now = Date.now();
+    const presence = await ctx.db.query("presence").collect();
+    const lastSeenByUser = new Map<Id<"users">, number>(
+      presence.map((row) => [row.userId, row.lastSeenAt])
+    );
+    const seenAtByUser = new Map<Id<"users">, number>(
+      presence
+        .filter((row) => now - row.lastSeenAt < ONLINE_WINDOW_MS)
+        .map((row) => [row.userId, row.lastSeenAt])
+    );
+    const isOnline = (operator: (typeof operators)[number]) =>
+      operator.isAvailable && seenAtByUser.has(operator.userId);
 
     // Ratings, per driver.
     const ratingsByOperator = new Map<Id<"operators">, number[]>();
@@ -169,6 +223,8 @@ export const getDashboard = query({
           documentKinds,
           email: operator.email,
           isAvailable: operator.isAvailable,
+          isOnline: isOnline(operator),
+          lastSeenAt: lastSeenByUser.get(operator.userId) ?? null,
           licenseNumber: operator.licenseNumber,
           missingDocuments: DOCUMENT_KINDS.filter(
             (kind) => !documentKinds.includes(kind)
@@ -208,7 +264,6 @@ export const getDashboard = query({
         pickup: ride.pickup,
         pickupAddress: ride.pickup.address,
         status: ride.status,
-        vehicleType: ride.vehicleType ?? null,
       }));
 
     const recentRides: AdminRideRow[] = rides
@@ -225,7 +280,6 @@ export const getDashboard = query({
         fare: ride.fare,
         pickupAddress: ride.pickup.address,
         status: ride.status,
-        vehicleType: ride.vehicleType ?? null,
       }));
 
     // Rider totals: how many trips each commuter has taken and what they
@@ -269,6 +323,7 @@ export const getDashboard = query({
         _id: payment._id,
         amount: payment.amount,
         createdAt: payment.createdAt,
+        provider: payment.provider,
         referenceNumber: payment.referenceNumber,
         riderName: commuterNameById.get(payment.commuterId) ?? "Passenger",
       }));
@@ -300,28 +355,47 @@ export const getDashboard = query({
         ? null
         : waitTimes.reduce((sum, wait) => sum + wait, 0) / waitTimes.length;
 
-    const vehicleTypes = new Set<string>();
-    for (const ride of rides) {
-      vehicleTypes.add(ride.vehicleType ?? "standard");
-    }
-    const byVehicleType: AdminCancellationRow[] = [...vehicleTypes]
-      .map((type) => ({
-        type,
-        cancelled: cancelledRides.filter(
-          (ride) => (ride.vehicleType ?? "standard") === type
-        ).length,
-        completed: rides.filter(
-          (ride) =>
-            ride.status === "completed" &&
-            (ride.vehicleType ?? "standard") === type
-        ).length,
-      }))
-      .sort((a, b) => b.cancelled - a.cancelled);
+    // There is one ride type, so the cancellations are not broken down by
+    // anything: they are a share of the rides that were taken.
+    const byVehicleType: AdminCancellationRow[] = [
+      {
+        cancelled: cancelledRides.length,
+        completed: rides.filter((ride) => ride.status === "completed").length,
+      },
+    ];
 
     const totalRatings = feedback.reduce((sum, entry) => sum + entry.rating, 0);
-    const activeDrivers = operators.filter(
-      (operator) => operator.isAvailable
-    ).length;
+    // On shift is not enough: the app has to be open too (fixoct51).
+    const activeDrivers = operators.filter(isOnline).length;
+
+    const toRow = (
+      person: { email: string; name: string; userId: Id<"users"> },
+      role: AdminUserRow["role"]
+    ): AdminUserRow => ({
+      email: person.email,
+      isOnline: seenAtByUser.has(person.userId),
+      lastSeenAt: lastSeenByUser.get(person.userId) ?? null,
+      name: person.name,
+      role,
+      userId: person.userId,
+    });
+    // Online first, then the most recently seen, then the never seen by name.
+    const byPresence = (a: AdminUserRow, b: AdminUserRow) =>
+      Number(b.isOnline) - Number(a.isOnline) ||
+      (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0) ||
+      a.name.localeCompare(b.name);
+    const commuterRows = commuters
+      .map((commuter) => toRow(commuter, "commuter"))
+      .sort(byPresence);
+    const operatorRows = operators
+      .map((operator) => ({
+        ...toRow(operator, "operator"),
+        isAvailable: operator.isAvailable,
+      }))
+      .sort(byPresence);
+    const activeUserCount =
+      commuterRows.filter((row) => row.isOnline).length +
+      operatorRows.filter((row) => row.isOnline).length;
     const approvedDrivers = operators.filter(
       (operator) => approvalStatusOf(operator) === "approved"
     ).length;
@@ -348,6 +422,7 @@ export const getDashboard = query({
       liveRides,
       metrics: {
         activeDrivers,
+        activeUsers: activeUserCount,
         averageRating:
           feedback.length === 0
             ? 0
@@ -365,10 +440,15 @@ export const getDashboard = query({
           0
         ),
         riders: commuters.length,
+        totalUsers: commuters.length + operators.length,
       },
       payments: paymentRows,
       recentRides,
       riders,
+      userRoster: {
+        commuters: commuterRows.slice(0, ROSTER_LIMIT),
+        operators: operatorRows.slice(0, ROSTER_LIMIT),
+      },
     };
   },
 });

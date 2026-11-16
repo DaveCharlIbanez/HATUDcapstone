@@ -59,7 +59,9 @@ export function MapOverlays({ displayName, theme }: MapOverlaysProps) {
         </div>
       </div>
 
-      <div className="absolute top-4 left-4 z-20 hidden md:block">
+      {/* The menu button floats at the top left, so the card starts clear
+          of it. */}
+      <div className="absolute top-4 left-[4.5rem] z-20 hidden md:block">
         <div className="flex items-center gap-3 rounded-3xl border border-[var(--border)] bg-[var(--surface)]/95 px-4 py-3 shadow-xl backdrop-blur">
           <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--surface-muted)] text-lg text-sky-600 dark:text-sky-300">
             <FaUser />

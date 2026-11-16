@@ -163,6 +163,39 @@ export async function requireCommuterOwnership(
 }
 
 /**
+ * The caller may see this driver's public details.
+ *
+ * A driver may see their own, an admin may see anyone's, and a passenger who
+ * rode with the driver may see them — which is what lets a passenger read the
+ * driver's rating before leaving one of their own.
+ */
+export async function requireOperatorVisible(
+  ctx: Ctx,
+  token: string,
+  operatorId: Id<"operators">
+): Promise<void> {
+  const actor = await resolveActor(ctx, token);
+
+  if (actor.role === "admin") {
+    return;
+  }
+  if (actor.role === "operator" && actor.operatorId === operatorId) {
+    return;
+  }
+
+  // A passenger who shared a ride with this driver.
+  const rides = await ctx.db
+    .query("rides")
+    .withIndex("by_operatorId", (q) => q.eq("operatorId", operatorId))
+    .collect();
+  const sharesRide = rides.some((ride) => ride.commuterId === actor.commuterId);
+
+  if (!sharesRide) {
+    throw new Error("Forbidden: you cannot see this driver's rating");
+  }
+}
+
+/**
  * Gate for reading a ride the caller takes part in. Admins bypass the
  * participation check; everyone else must be the ride's commuter or its
  * assigned operator.

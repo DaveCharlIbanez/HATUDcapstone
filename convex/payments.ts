@@ -1,11 +1,19 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { action, internalMutation, query } from "./_generated/server";
 import {
-  gcashSandbox,
+  methodOf,
+  type PaymentMethod,
+  paymentMethodValidator,
+} from "./lib/paymentMethods";
+import {
+  buildPaymentRow,
+  type ChargeResult,
   type PaymentCurrency,
   type PaymentStatus,
+  referenceNumberFor,
+  WALLET_PROVIDERS,
 } from "./lib/payments";
 import { resolveActor } from "./lib/withAuth";
 
@@ -17,6 +25,8 @@ export interface ChargeSummary {
   currency: PaymentCurrency;
   failureReason?: string;
   id: Id<"payments">;
+  /** The method the ride was booked with, and therefore the one charged. */
+  method: PaymentMethod;
   providerRef: string;
   referenceNumber: string;
   status: PaymentStatus;
@@ -25,10 +35,14 @@ export interface ChargeSummary {
 /**
  * Ride payments.
  *
- * The amount is always taken from the ride record, never from the client.
- * The current provider is a GCash sandbox; swapping in the real gateway means
- * replacing the provider implementation in convex/lib/payments.ts and nothing
- * else.
+ * The amount is always taken from the ride record, never from the client, and
+ * so is the method: the rider chose it when the ride was booked, and the
+ * charge reads it from the ride rather than from the request. A client cannot
+ * ask to be charged through a method it did not book.
+ *
+ * The current providers are GCash and Maya sandboxes; swapping in the real
+ * gateways means replacing those implementations in convex/lib/payments.ts and
+ * nothing else.
  *
  * The charge runs as an action because a gateway call may take time and may
  * reach out over the network. The action prepares the charge through an
@@ -56,9 +70,21 @@ const chargeResultValidator = v.object({
 /**
  * The passenger's most recent completed ride that still owes money, together
  * with any payment already recorded against it.
+ *
+ * A cash ride is settled by a handover with the driver rather than through the
+ * app, so it is reported with its method and the page shows the handover
+ * instead of a charge form.
+ *
+ * With `rideId`, it is that ride, even once it has been paid. The payment
+ * page pins the ride it opened on: without that, paying made this query move
+ * on to the next unpaid trip, and the "Rate your driver" button sent the
+ * passenger to rate an older ride instead of the one they had just taken.
  */
 export const getDue = query({
-  args: { sessionToken: v.string() },
+  args: {
+    sessionToken: v.string(),
+    rideId: v.optional(v.id("rides")),
+  },
   handler: async (ctx, args) => {
     const actor = await resolveActor(ctx, args.sessionToken);
     if (actor.role !== "commuter" || !actor.commuterId) {
@@ -66,15 +92,24 @@ export const getDue = query({
     }
     const commuterId = actor.commuterId;
 
-    const rides = await ctx.db
-      .query("rides")
-      .withIndex("by_commuterId", (q) => q.eq("commuterId", commuterId))
-      .order("desc")
-      .collect();
-
-    const due = rides.find(
-      (ride) => ride.status === "completed" && ride.paymentStatus !== "paid"
-    );
+    let due: Doc<"rides"> | null = null;
+    if (args.rideId) {
+      const ride = await ctx.db.get(args.rideId);
+      if (!ride || ride.commuterId !== commuterId) {
+        throw new Error("Forbidden: this ride does not belong to you");
+      }
+      due = ride.status === "completed" ? ride : null;
+    } else {
+      const rides = await ctx.db
+        .query("rides")
+        .withIndex("by_commuterId", (q) => q.eq("commuterId", commuterId))
+        .order("desc")
+        .take(50);
+      due =
+        rides.find(
+          (ride) => ride.status === "completed" && ride.paymentStatus !== "paid"
+        ) ?? null;
+    }
     if (!due) {
       return null;
     }
@@ -88,6 +123,7 @@ export const getDue = query({
       rideId: due._id,
       amount: due.fare,
       distance: due.distance,
+      method: methodOf(due.paymentMethod),
       pickupAddress: due.pickup.address,
       dropoffAddress: due.dropoff.address,
       paymentStatus: due.paymentStatus ?? "unpaid",
@@ -141,6 +177,8 @@ function paymentStatusFor(
  */
 export interface PreparedCharge {
   amount: number;
+  /** The method the ride was booked with — the one that will be charged. */
+  method: PaymentMethod;
   referenceNumber: string;
 }
 
@@ -166,9 +204,12 @@ export const prepare = internalMutation({
       throw new Error("A ride can only be paid for once it is complete");
     }
 
+    const method = methodOf(ride.paymentMethod);
+
     return {
       amount: ride.fare,
-      referenceNumber: `HATUD-${args.rideId.slice(-8).toUpperCase()}`,
+      method,
+      referenceNumber: referenceNumberFor(args.rideId, method),
     };
   },
 });
@@ -181,6 +222,7 @@ export const record = internalMutation({
   args: {
     sessionToken: v.string(),
     rideId: v.id("rides"),
+    method: paymentMethodValidator,
     result: chargeResultValidator,
   },
   handler: async (ctx, args): Promise<ChargeSummary> => {
@@ -204,27 +246,29 @@ export const record = internalMutation({
         status: existing.status,
         amount: existing.amount,
         currency: existing.currency,
+        method: existing.provider,
         providerRef: existing.providerRef,
         referenceNumber: existing.referenceNumber,
       };
     }
 
     const now = Date.now();
-    const paymentId = await ctx.db.insert("payments", {
-      rideId: args.rideId,
-      commuterId: actor.commuterId,
-      amount: ride.fare,
-      currency: "PHP",
-      provider: "gcash",
-      providerRef: args.result.transactionId,
-      referenceNumber: args.result.referenceNumber,
-      status: args.result.status,
-      ...(args.result.message === undefined
-        ? {}
-        : { failureReason: args.result.message }),
-      createdAt: now,
-      updatedAt: now,
-    });
+    const paymentId = await ctx.db.insert(
+      "payments",
+      buildPaymentRow({
+        amount: ride.fare,
+        commuterId: actor.commuterId,
+        ...(args.result.message === undefined
+          ? {}
+          : { failureReason: args.result.message }),
+        method: args.method,
+        now,
+        providerRef: args.result.transactionId,
+        referenceNumber: args.result.referenceNumber,
+        rideId: args.rideId,
+        status: args.result.status,
+      })
+    );
 
     const paid = args.result.status === "SETTLED";
     await ctx.db.patch(args.rideId, {
@@ -238,6 +282,7 @@ export const record = internalMutation({
       status: args.result.status,
       amount: ride.fare,
       currency: "PHP" as const,
+      method: args.method,
       providerRef: args.result.transactionId,
       referenceNumber: args.result.referenceNumber,
       ...(args.result.message === undefined
@@ -248,7 +293,8 @@ export const record = internalMutation({
 });
 
 /**
- * Charge the fare for a completed ride through the configured provider.
+ * Charge the fare for a completed ride through the provider the ride was
+ * booked with.
  */
 export const charge = action({
   args: {
@@ -262,7 +308,15 @@ export const charge = action({
       rideId: args.rideId,
     });
 
-    const result = await gcashSandbox.charge({
+    if (prepared.method === "cash") {
+      throw new Error(
+        "This ride is paid in cash — hand the fare to your driver at the drop-off."
+      );
+    }
+
+    const provider = WALLET_PROVIDERS[prepared.method];
+
+    const result: ChargeResult = await provider.charge({
       amount: prepared.amount,
       currency: "PHP",
       description: "HATUD ride fare",
@@ -273,6 +327,7 @@ export const charge = action({
     return await ctx.runMutation(internal.payments.record, {
       sessionToken: args.sessionToken,
       rideId: args.rideId,
+      method: prepared.method,
       result,
     });
   },

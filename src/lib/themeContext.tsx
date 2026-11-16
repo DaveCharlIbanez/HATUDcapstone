@@ -10,13 +10,21 @@ import {
 } from "react";
 import { api } from "../../convex/_generated/api";
 import { useAuth } from "./authContext";
+import {
+  applyThemeWithRipple,
+  type ThemeTransitionOrigin,
+} from "./themeTransition";
 
 type Theme = "light" | "dark";
 
 interface ThemeContextType {
-  setTheme: (theme: Theme) => void;
+  /**
+   * Applies a theme. When an origin is given the change is revealed with a
+   * circular ripple that starts at that point.
+   */
+  setTheme: (theme: Theme, origin?: ThemeTransitionOrigin) => void;
   theme: Theme;
-  toggleTheme: () => void;
+  toggleTheme: (origin?: ThemeTransitionOrigin) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -59,21 +67,33 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [themePreference]);
 
   const setTheme = useCallback(
-    (newTheme: Theme) => {
-      setThemeState(newTheme);
-      document.documentElement.setAttribute("data-theme", newTheme);
-      localStorage.setItem(STORAGE_KEY, newTheme);
+    (newTheme: Theme, origin?: ThemeTransitionOrigin) => {
+      const apply = () => {
+        setThemeState(newTheme);
+        document.documentElement.setAttribute("data-theme", newTheme);
+        localStorage.setItem(STORAGE_KEY, newTheme);
 
-      if (sessionToken) {
-        setUserTheme({ sessionToken, theme: newTheme }).catch(console.error);
+        if (sessionToken) {
+          setUserTheme({ sessionToken, theme: newTheme }).catch(console.error);
+        }
+      };
+
+      if (!origin) {
+        apply();
+        return;
       }
+
+      applyThemeWithRipple(origin, apply).catch(() => undefined);
     },
     [sessionToken, setUserTheme]
   );
 
-  const toggleTheme = useCallback(() => {
-    setTheme(theme === "light" ? "dark" : "light");
-  }, [theme, setTheme]);
+  const toggleTheme = useCallback(
+    (origin?: ThemeTransitionOrigin) => {
+      setTheme(theme === "light" ? "dark" : "light", origin);
+    },
+    [setTheme, theme]
+  );
 
   // The context is always provided. Gating it on `mounted` meant that any
   // component calling `useTheme` threw during server rendering, which broke

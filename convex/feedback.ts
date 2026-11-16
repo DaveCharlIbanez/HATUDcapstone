@@ -1,13 +1,21 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireCommuterOwnership, resolveActor } from "./lib/withAuth";
+import {
+  requireCommuterOwnership,
+  requireOperatorVisible,
+  resolveActor,
+} from "./lib/withAuth";
 
 // Feedback rows are only readable by the passenger who wrote them or by the
 // driver being rated. The old by-id / by-ride / by-operator lookups were
 // unauthenticated and had no callers.
 
 /**
- * The caller's own average rating as a driver. Drivers and admins only.
+ * A driver's average rating.
+ *
+ * The driver may see their own, an admin may see anyone's, and a passenger
+ * who rode with the driver may see it — which is how a passenger reads the
+ * rating before leaving one of their own.
  */
 export const getAverageForOperator = query({
   args: {
@@ -15,10 +23,7 @@ export const getAverageForOperator = query({
     operatorId: v.id("operators"),
   },
   handler: async (ctx, args) => {
-    const actor = await resolveActor(ctx, args.sessionToken);
-    if (actor.role !== "admin" && actor.operatorId !== args.operatorId) {
-      throw new Error("Forbidden: you do not own this operator profile");
-    }
+    await requireOperatorVisible(ctx, args.sessionToken, args.operatorId);
 
     const feedback = await ctx.db
       .query("feedback")
@@ -33,6 +38,41 @@ export const getAverageForOperator = query({
     return {
       average: Math.round((total / feedback.length) * 10) / 10,
       count: feedback.length,
+    };
+  },
+});
+
+/**
+ * The feedback left for a ride, if any.
+ *
+ * Only the passenger who wrote it, or the driver who was rated, may read it.
+ */
+export const getForRide = query({
+  args: {
+    sessionToken: v.string(),
+    rideId: v.id("rides"),
+  },
+  handler: async (ctx, args) => {
+    const actor = await resolveActor(ctx, args.sessionToken);
+
+    const row = await ctx.db
+      .query("feedback")
+      .withIndex("by_rideId", (q) => q.eq("rideId", args.rideId))
+      .first();
+
+    if (!row) {
+      return null;
+    }
+
+    const isAuthor = actor.commuterId === row.commuterId;
+    const isRated = actor.operatorId === row.operatorId;
+    if (actor.role !== "admin" && !isAuthor && !isRated) {
+      throw new Error("Forbidden: you cannot read this feedback");
+    }
+
+    return {
+      comment: row.comment ?? null,
+      rating: row.rating,
     };
   },
 });

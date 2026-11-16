@@ -1,12 +1,11 @@
 "use client";
 
-export type RideStatus =
-  | "searching"
-  | "matched"
-  | "arriving"
-  | "arrived"
-  | "in-progress"
-  | "completed";
+import { DemoBadge } from "@/components/DemoBadge";
+import { formatEta } from "@/lib/format";
+import { CancelGrace } from "./CancelGrace";
+import type { RideStatus } from "./rideStage";
+
+export type { RideStatus } from "./rideStage";
 
 export interface MatchedDriver {
   name: string;
@@ -17,22 +16,96 @@ export interface MatchedDriver {
   };
 }
 
+/**
+ * Where the driver has got to.
+ *
+ * `onTheWay` means the driver has just reported a position that is still a
+ * street block away, so the trip cannot start yet — and the button that
+ * starts it is disabled, with the reason said out loud.
+ */
+export type DriverArrival = "arrived" | "onTheWay" | "unknown";
+
 interface RideProgressPanelProps {
+  /**
+   * When the passenger's 1-minute window to cancel an accepted ride closes,
+   * or null when there is none (fixoct46).
+   */
+  cancelDeadline?: number | null;
+  /** Where the driver is, as far as the passenger can tell. */
+  driverArrival: DriverArrival;
+  /**
+   * How long the road takes, in seconds.
+   *
+   * The router measures the road as it draws it, so this is the time the road
+   * takes and not a guess. It is null when there is no road yet.
+   */
+  etaSeconds: number | null;
+  /** A demo trip: the server drives the vehicle, so the screen says so. */
+  isDemo?: boolean;
   matchedOperator: MatchedDriver | null;
   onBookAnother: () => void;
   onCancel: () => void;
   onConfirm: () => void;
   onPay: () => void;
+  /** What the finished trip needs: paying for it, or rating the driver. */
+  payActionLabel?: string;
   rideStatus: RideStatus;
+  /** The vehicle has reached the destination, and the driver can end the trip. */
+  tripArrived?: boolean;
+}
+
+/** What the passenger is told about the driver, and whether they can start. */
+function arrivalCopy(arrival: DriverArrival): {
+  blocked: boolean;
+  text: string;
+} {
+  if (arrival === "arrived") {
+    return {
+      blocked: false,
+      text: "Your driver is at your pickup point.",
+    };
+  }
+  if (arrival === "onTheWay") {
+    return {
+      blocked: true,
+      text: "Your driver is still on the way.",
+    };
+  }
+  return {
+    blocked: false,
+    text: "Your driver is on the way. Confirm when they are with you.",
+  };
+}
+
+/**
+ * The time the road takes, said as a badge.
+ */
+function EtaBadge({ seconds }: { seconds: number | null }) {
+  const eta = formatEta(seconds);
+  if (!eta) {
+    return null;
+  }
+  return (
+    // fixoct48: solid and bold, so the time remaining is readable.
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-600 px-2.5 py-0.5 font-semibold text-white text-xs">
+      {eta}
+    </span>
+  );
 }
 
 export function RideProgressPanel({
+  cancelDeadline = null,
   rideStatus,
+  driverArrival,
+  etaSeconds,
+  isDemo = false,
   matchedOperator,
   onCancel,
   onConfirm,
   onPay,
   onBookAnother,
+  payActionLabel = "Pay & Rate Driver",
+  tripArrived = false,
 }: RideProgressPanelProps) {
   if (rideStatus === "searching") {
     return (
@@ -68,10 +141,13 @@ export function RideProgressPanel({
       );
     }
 
+    const arrival = arrivalCopy(driverArrival);
+
     return (
       <div className="space-y-4">
-        <h3 className="mb-6 text-center font-semibold text-[var(--foreground)] text-xl">
+        <h3 className="mb-6 flex items-center justify-center gap-2 text-center font-semibold text-[var(--foreground)] text-xl">
           Driver Assigned!
+          {isDemo ? <DemoBadge /> : null}
         </h3>
 
         <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -107,25 +183,49 @@ export function RideProgressPanel({
           </div>
         </div>
 
+        <div className="flex items-center justify-between gap-3">
+          <p aria-live="polite" className="text-[var(--text-muted)] text-sm">
+            {arrival.text}
+          </p>
+          <EtaBadge seconds={etaSeconds} />
+        </div>
+
         <button
-          className="w-full rounded-3xl bg-sky-500 py-3 font-semibold text-sm text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400"
+          className="w-full rounded-3xl bg-sky-500 py-3 font-semibold text-sm text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)] disabled:text-[var(--text-muted)] disabled:shadow-none"
+          disabled={arrival.blocked}
           onClick={onConfirm}
           type="button"
         >
-          Confirm &amp; Start Ride
+          Confirm
         </button>
+
+        <CancelGrace deadline={cancelDeadline} onCancel={onCancel} />
       </div>
     );
   }
 
   return (
     <div className="py-8 text-center">
-      <h3 className="mb-4 font-semibold text-[var(--foreground)] text-lg">
-        {rideStatus === "arriving" && "Driver is on the way"}
-        {rideStatus === "arrived" && "Driver has arrived"}
+      <h3 className="mb-4 flex items-center justify-center gap-2 font-semibold text-[var(--foreground)] text-lg">
         {rideStatus === "in-progress" && "Ride in progress"}
         {rideStatus === "completed" && "Ride completed"}
+        {isDemo && rideStatus === "in-progress" ? <DemoBadge /> : null}
       </h3>
+
+      {rideStatus === "in-progress" && tripArrived && (
+        <p aria-live="polite" className="mb-4 text-[var(--text-muted)] text-sm">
+          You have arrived. Your driver will end the trip.
+        </p>
+      )}
+
+      {rideStatus === "in-progress" && !tripArrived && (
+        <div className="mb-4 flex items-center justify-center gap-2">
+          <span className="font-medium text-[var(--foreground)] text-sm">
+            Time to your destination
+          </span>
+          <EtaBadge seconds={etaSeconds} />
+        </div>
+      )}
 
       {matchedOperator && (
         <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -151,7 +251,7 @@ export function RideProgressPanel({
             onClick={onPay}
             type="button"
           >
-            Pay &amp; Rate Driver
+            {payActionLabel}
           </button>
           <button
             className="w-full rounded-3xl bg-[var(--surface-strong)] py-3 font-semibold text-[var(--foreground)] text-sm transition hover:bg-[var(--surface-muted)]"

@@ -3,9 +3,40 @@
  *
  * The tariff is a flat base fee that covers the first few kilometres, plus a
  * metered increment for every started kilometre beyond that.
+ *
+ * There is one ride type. The tariff has one entry, because a second one
+ * would be a choice the app does not offer.
  */
 
-export type VehicleType = "standard" | "priority";
+import { v } from "convex/values";
+import { round2 } from "./routing";
+
+export type VehicleType = "standard";
+
+/** The ride type a ride is booked as. */
+export const VEHICLE_TYPE: VehicleType = "standard";
+
+/**
+ * The ride types a client may ask for.
+ *
+ * "priority" is what the Android builds that predate the single ride type
+ * send. There is no Priority ride any more: it is the ride that exists, at
+ * the fare the rider was quoted — which is the same fare, because there is
+ * only one. The value is accepted so those builds keep working.
+ */
+export const vehicleTypeValidator = v.union(
+  v.literal("standard"),
+  v.literal("priority")
+);
+
+/**
+ * The ride type a booking is for.
+ *
+ * Whatever was asked for, a ride is booked as the one ride type there is.
+ */
+export function vehicleTypeFor(_requested: string | undefined): VehicleType {
+  return VEHICLE_TYPE;
+}
 
 export interface FareRate {
   /** Flat fee charged for every ride. */
@@ -17,22 +48,17 @@ export interface FareRate {
 }
 
 export const FARE_RATES: Record<VehicleType, FareRate> = {
-  standard: { base: 30, includedKm: 2, perKm: 10 },
-  priority: { base: 50, includedKm: 2, perKm: 12 },
+  standard: { base: 30, includedKm: 2, perKm: 12 },
 };
 
-/**
- * Straight-line distance understates road distance by roughly a quarter in
- * dense urban areas; this factor converts one to the other.
- */
-export const ROAD_CIRCUITY_FACTOR = 1.3;
-
-const EARTH_RADIUS_KM = 6371;
-
-export interface Coordinate {
-  latitude: number;
-  longitude: number;
-}
+export const fareQuoteValidator = v.object({
+  baseFare: v.number(),
+  distanceKm: v.number(),
+  fare: v.number(),
+  includedKm: v.number(),
+  meteredAmount: v.number(),
+  meteredKm: v.number(),
+});
 
 export interface FareQuote {
   baseFare: number;
@@ -44,27 +70,6 @@ export interface FareQuote {
   meteredAmount: number;
   /** Kilometres billed beyond the included distance. */
   meteredKm: number;
-}
-
-export function round2(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-export function haversineKm(from: Coordinate, to: Coordinate): number {
-  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
-  const deltaLat = toRadians(to.latitude - from.latitude);
-  const deltaLon = toRadians(to.longitude - from.longitude);
-  const lat1 = toRadians(from.latitude);
-  const lat2 = toRadians(to.latitude);
-  const a =
-    Math.sin(deltaLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return EARTH_RADIUS_KM * c;
-}
-
-export function roadDistanceKm(from: Coordinate, to: Coordinate): number {
-  return round2(haversineKm(from, to) * ROAD_CIRCUITY_FACTOR);
 }
 
 export function quoteFare(
@@ -84,12 +89,4 @@ export function quoteFare(
     meteredAmount,
     distanceKm: round2(distanceKm),
   };
-}
-
-export function quoteForTrip(
-  vehicleType: VehicleType,
-  pickup: Coordinate,
-  dropoff: Coordinate
-): FareQuote {
-  return quoteFare(vehicleType, roadDistanceKm(pickup, dropoff));
 }

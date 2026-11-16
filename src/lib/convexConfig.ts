@@ -58,17 +58,9 @@ export interface ConvexRide {
   from: string;
   id: string;
   operatorId?: string;
+  paymentMethod?: string;
   rating?: number;
   status: "requested" | "active" | "completed" | "cancelled";
   to: string;
   vehicle: string;
-}
-
-export interface ConvexPaymentMethod {
-  brand?: string;
-  commuterId: string;
-  id: string;
-  isDefault: boolean;
-  last4?: string;
-  type: "card" | "cash";
 }

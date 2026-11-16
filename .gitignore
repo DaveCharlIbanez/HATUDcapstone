@@ -48,3 +48,9 @@ yarn-error.log*
 # idea files
 .idea
 dist/
+
+# Locally built APKs, kept out of the repository
+HATUD-v*.apk
+
+# Local data backups (may hold password hashes)
+.backups/
